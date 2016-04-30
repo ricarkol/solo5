@@ -23,6 +23,7 @@ extern void start_kernel(void);
 void sleep_test(void);
 void blk_test(void);
 
+int var = 1234;
 
 static void banner(void) {
     printf("            |      ___|  \n");
@@ -49,10 +50,10 @@ void kernel_main(uint64_t size, uint64_t kernel_end) {
     //void ping_forever(void);
     //ping_forever();
 
+    for(;;);
     start_kernel();
 
     //ping_serve();
-    //for(;;);
 
 
 #if 0

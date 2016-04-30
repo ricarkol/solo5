@@ -92,42 +92,178 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <signal.h>
+#include <netdb.h>
+#include <assert.h>
+#include <linux/kvm.h>
+
 /************************************************************************
  *
  * external low-level support routines
  */
 
-extern void putDebugChar();	/* write a single character      */
-extern int getDebugChar();	/* read and return a single char */
-extern void exceptionHandler();	/* assign an exception handler   */
+
+static int listen_socket_fd;
+static int socket_fd;
+
+static void wait_for_connect(int portn)
+{
+  struct sockaddr_in sockaddr;
+  socklen_t sockaddr_len;
+  struct protoent *protoent;
+  int r;
+  int opt;
+
+  printf("trying to get a connection at port %d\n", portn);
+
+  listen_socket_fd = socket(PF_INET, SOCK_STREAM, 0);
+  assert(listen_socket_fd != -1);
+
+  /* Allow rapid reuse of this port */
+  opt = 1;
+#if __MINGW32__
+  r = setsockopt(listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
+#else
+  r = setsockopt(listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
+  if (r == -1)
+  {
+    perror("setsockopt(SO_REUSEADDR) failed");
+  }
+
+  memset (&sockaddr, '\000', sizeof sockaddr);
+#if BX_HAVE_SOCKADDR_IN_SIN_LEN
+  // if you don't have sin_len change that to #if 0.  This is the subject of
+  // bug [ 626840 ] no 'sin_len' in 'struct sockaddr_in'.
+  sockaddr.sin_len = sizeof sockaddr;
+#endif
+  sockaddr.sin_family = AF_INET;
+  sockaddr.sin_port = htons(portn);
+  sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+  r = bind(listen_socket_fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
+  if (r == -1)
+  {
+    perror("Failed to bind socket");
+  }
+
+  r = listen(listen_socket_fd, 0);
+  if (r == -1)
+  {
+    perror("Failed to listen on socket");
+  }
+
+  sockaddr_len = sizeof sockaddr;
+  socket_fd = accept(listen_socket_fd, (struct sockaddr *)&sockaddr, &sockaddr_len);
+  if (socket_fd == -1)
+  {
+    perror("Failed to accept on socket");
+  }
+  close(listen_socket_fd);
+
+  protoent = getprotobyname ("tcp");
+  if (!protoent)
+  {
+    perror("getprotobyname (\"tcp\") failed");
+    return;
+  }
+
+  /* Disable Nagle - allow small packets to be sent without delay. */
+  opt = 1;
+#ifdef __MINGW32__
+  r = setsockopt (socket_fd, protoent->p_proto, TCP_NODELAY, (const char *)&opt, sizeof(opt));
+#else
+  r = setsockopt (socket_fd, protoent->p_proto, TCP_NODELAY, &opt, sizeof(opt));
+#endif
+  if (r == -1)
+  {
+    perror("setsockopt(TCP_NODELAY) failed");
+  }
+  int ip = sockaddr.sin_addr.s_addr;
+  printf("Connected to %d.%d.%d.%d\n", ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, (ip >> 24) & 0xff);
+}
+
+
+void debug_loop(int);
+
+void gdb_stub_start(int vcpufd)
+{
+    wait_for_connect(1234);
+    debug_loop(vcpufd);
+}
+
+static char buf[4096], *bufptr = buf;
+static void flush_debug_buffer()
+{
+  char *p = buf;
+  while (p != bufptr) {
+    int n = send(socket_fd, p, bufptr-p, 0);
+    if (n == -1) {
+      perror("error on debug socket: %m");
+      break;
+    }
+    p += n;
+  }
+  bufptr = buf;
+}
+
+void putDebugChar(int ch)
+{
+    if (bufptr == buf + sizeof buf)
+    flush_debug_buffer();
+    *bufptr++ = ch;
+}
+
+int getDebugChar()
+{
+    char ch;
+
+    recv(socket_fd, &ch, 1, 0);
+
+    return(ch);
+}
+
+void exceptionHandler()
+{}
 
 /************************************************************************/
 /* BUFMAX defines the maximum number of characters in inbound/outbound buffers*/
 /* at least NUMREGBYTES*2 are needed for register packets */
-#define BUFMAX 400
+#define BUFMAX 400 * 4
 
 static char initialized;  /* boolean flag. != 0 means we've been initialized */
 
 int     remote_debug;
 /*  debug >  0 prints ill-formed commands in valid packets & checksum errors */
 
+extern uint8_t *mem;
+
 static const char hexchars[]="0123456789abcdef";
 
 /* Number of registers.  */
-#define NUMREGS	16
+#define NUMREGS	32
 
 /* Number of bytes of registers.  */
-#define NUMREGBYTES (NUMREGS * 4)
+#define NUMREGBYTES (NUMREGS * 8)
 
-enum regnames {EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI,
-	       PC /* also known as eip */,
-	       PS /* also known as eflags */,
-	       CS, SS, DS, ES, FS, GS};
+// list is here: gdb/amd64-linux-nat.c
+enum regnames {
+  RAX, RBX, RCX, RDX,
+  RSI, RDI, RBP, RSP,
+  R8, R9, R10, R11,
+  R12, R13, R14, R15,
+  RIP, EFLAGS, CS, SS,
+  DS, ES, FS, GS
+};
 
 /*
  * these should not be static cuz they can be used outside this module
  */
-int registers[NUMREGS];
+long registers[NUMREGS];
 
 #define STACKSIZE 10000
 int remcomStack[STACKSIZE/sizeof(int)];
@@ -136,6 +272,7 @@ static int* stackPtr = &remcomStack[STACKSIZE/sizeof(int) - 1];
 /***************************  ASSEMBLY CODE MACROS *************************/
 /* 									   */
 
+#if 0
 extern void
 return_to_prog ();
 
@@ -146,27 +283,28 @@ asm(".text");
 asm(".globl _return_to_prog");
 asm("_return_to_prog:");
 asm("        movw _registers+44, %ss");
-asm("        movl _registers+16, %esp");
-asm("        movl _registers+4, %ecx");
-asm("        movl _registers+8, %edx");
-asm("        movl _registers+12, %ebx");
-asm("        movl _registers+20, %ebp");
-asm("        movl _registers+24, %esi");
-asm("        movl _registers+28, %edi");
+asm("        movq _registers+16, %rsp");
+asm("        movq _registers+4, %rcx");
+asm("        movq _registers+8, %rdx");
+asm("        movq _registers+12, %rbx");
+asm("        movq _registers+20, %rbp");
+asm("        movq _registers+24, %rsi");
+asm("        movq _registers+28, %rdi");
 asm("        movw _registers+48, %ds");
 asm("        movw _registers+52, %es");
 asm("        movw _registers+56, %fs");
 asm("        movw _registers+60, %gs");
-asm("        movl _registers+36, %eax");
-asm("        pushq %eax");  /* saved eflags */
-asm("        movl _registers+40, %eax");
-asm("        pushq %eax");  /* saved cs */
-asm("        movl _registers+32, %eax");
-asm("        pushq %eax");  /* saved eip */
-asm("        movl _registers, %eax");
+asm("        movq _registers+36, %rax");
+asm("        pushq %rax");  /* saved eflags */
+asm("        movq _registers+40, %rax");
+asm("        pushq %rax");  /* saved cs */
+asm("        movq _registers+32, %rax");
+asm("        pushq %rax");  /* saved eip */
+asm("        movq _registers, %rax");
 /* use iret to restore pc and flags together so
    that trace flag works right.  */
 asm("        iret");
+#endif
 
 #define BREAKPOINT() asm("   int $3");
 
@@ -178,75 +316,14 @@ int gdb_i386vector = -1;
 
 /* GDB stores segment registers in 32-bit words (that's just the way
    m-i386v.h is written).  So zero the appropriate areas in registers.  */
-#define SAVE_REGISTERS1() \
-  asm ("movl %eax, _registers");                                   	  \
-  asm ("movl %ecx, _registers+4");			  		     \
-  asm ("movl %edx, _registers+8");			  		     \
-  asm ("movl %ebx, _registers+12");			  		     \
-  asm ("movl %ebp, _registers+20");			  		     \
-  asm ("movl %esi, _registers+24");			  		     \
-  asm ("movl %edi, _registers+28");			  		     \
-  asm ("movw $0, %ax");							     \
-  asm ("movw %ds, _registers+48");			  		     \
-  asm ("movw %ax, _registers+50");					     \
-  asm ("movw %es, _registers+52");			  		     \
-  asm ("movw %ax, _registers+54");					     \
-  asm ("movw %fs, _registers+56");			  		     \
-  asm ("movw %ax, _registers+58");					     \
-  asm ("movw %gs, _registers+60");			  		     \
-  asm ("movw %ax, _registers+62");
-#define SAVE_ERRCODE() \
-  asm ("popl %ebx");                                  \
-  asm ("movl %ebx, _gdb_i386errcode");
-#define SAVE_REGISTERS2() \
-  asm ("popl %ebx"); /* old eip */			  		     \
-  asm ("movl %ebx, _registers+32");			  		     \
-  asm ("popl %ebx");	 /* old cs */			  		     \
-  asm ("movl %ebx, _registers+40");			  		     \
-  asm ("movw %ax, _registers+42");                                           \
-  asm ("popl %ebx");	 /* old eflags */		  		     \
-  asm ("movl %ebx, _registers+36");			 		     \
-  /* Now that we've done the pops, we can save the stack pointer.");  */   \
-  asm ("movw %ss, _registers+44");					     \
-  asm ("movw %ax, _registers+46");     	       	       	       	       	     \
-  asm ("movl %esp, _registers+16");
+#define SAVE_REGISTERS1()
+#define SAVE_ERRCODE()
+#define SAVE_REGISTERS2()
 
 /* See if mem_fault_routine is set, if so just IRET to that address.  */
-#define CHECK_FAULT() \
-  asm ("cmpl $0, _mem_fault_routine");					   \
-  asm ("jne mem_fault");
+#define CHECK_FAULT()
 
-asm (".text");
-asm ("mem_fault:");
-/* OK to clobber temp registers; we're just going to end up in set_mem_err.  */
-/* Pop error code from the stack and save it.  */
-asm ("     popl %eax");
-asm ("     movl %eax, _gdb_i386errcode");
-
-asm ("     popl %eax"); /* eip */
-/* We don't want to return there, we want to return to the function
-   pointed to by mem_fault_routine instead.  */
-asm ("     movl _mem_fault_routine, %eax");
-asm ("     popl %ecx"); /* cs (low 16 bits; junk in hi 16 bits).  */
-asm ("     popl %edx"); /* eflags */
-
-/* Remove this stack frame; when we do the iret, we will be going to
-   the start of a function, so we want the stack to look just like it
-   would after a "call" instruction.  */
-asm ("     leave");
-
-/* Push the stuff that iret wants.  */
-asm ("     pushq %edx"); /* eflags */
-asm ("     pushq %ecx"); /* cs */
-asm ("     pushq %eax"); /* eip */
-
-/* Zero mem_fault_routine.  */
-asm ("     movl $0, %eax");
-asm ("     movl %eax, _mem_fault_routine");
-
-asm ("iret");
-
-#define CALL_HOOK() asm("call _remcomHandler");
+#define CALL_HOOK()
 
 /* This function is called when a i386 exception occurs.  It saves
  * all the cpu regs in the _registers array, munges the stack a bit,
@@ -418,21 +495,11 @@ SAVE_REGISTERS2();
 asm ("pushq $14");
 CALL_HOOK();
 
-/*
- * remcomHandler is a front end for handle_exception.  It moves the
- * stack pointer into an area reserved for debugger use.
- */
-asm("_remcomHandler:");
-asm("           popl %eax");        /* pop off return address     */
-asm("           popl %eax");      /* get the exception number   */
-asm("		movl _stackPtr, %esp"); /* move to remcom stack area  */
-asm("		pushq %eax");	/* push exception onto stack  */
-asm("		call  _handle_exception");    /* this never returns */
 
 void
 _returnFromException ()
 {
-  return_to_prog ();
+  //return_to_prog ();
 }
 
 int
@@ -596,6 +663,20 @@ set_char (char *addr, int val)
 /* return a pointer to the last char put in buf (null) */
 /* If MAY_FAULT is non-zero, then we should set mem_err in response to
    a fault; if zero treat a fault like any other fault in the stub.  */
+
+char* mem2hex2(const char* mem, char* buf, int count)
+{
+  int i;
+  for (i = 0; i<count; i++)
+  {
+    char ch = *mem++;
+    *buf++ = hexchars[ch >> 4];
+    *buf++ = hexchars[ch % 16];
+  }
+  *buf = 0;
+  return(buf);
+}
+
 char *
 mem2hex (mem, buf, count, may_fault)
      char *mem;
@@ -758,9 +839,238 @@ static int hexToLong(char **ptr, long *longValue)
 	return numChars;
 }
 
+
+
+static void put_reply(const char* buffer)
+{
+  unsigned char csum;
+  int i;
+
+  do {
+    putDebugChar('$');
+
+    csum = 0;
+
+    i = 0;
+    while (buffer[i] != 0)
+    {
+      putDebugChar(buffer[i]);
+      csum = csum + buffer[i];
+      i++;
+    }
+
+    putDebugChar('#');
+    putDebugChar(hexchars[csum >> 4]);
+    putDebugChar(hexchars[csum % 16]);
+    flush_debug_buffer();
+  } while (getDebugChar() != '+');
+  printf("put_reply '%s'\n", buffer);
+}
+
+static void get_command(char* buffer)
+{
+  unsigned char checksum;
+  unsigned char xmitcsum;
+  char ch;
+  unsigned int count;
+  unsigned int i;
+
+  do {
+    while ((ch = getDebugChar()) != '$');
+
+    checksum = 0;
+    xmitcsum = 0;
+    count = 0;
+
+    while (1)
+    {
+      ch = getDebugChar();
+      if (ch == '#') break;
+      checksum = checksum + ch;
+      buffer[count] = ch;
+      count++;
+    }
+    buffer[count] = 0;
+
+    if (ch == '#')
+    {
+      xmitcsum = hex(getDebugChar()) << 4;
+      xmitcsum += hex(getDebugChar());
+      if (checksum != xmitcsum)
+      {
+        perror("Bad checksum");
+      }
+    }
+
+    if (checksum != xmitcsum)
+    {
+      putDebugChar('-');
+      flush_debug_buffer();
+    }
+    else
+    {
+      putDebugChar('+');
+      if (buffer[2] == ':')
+      {
+        putDebugChar(buffer[0]);
+        putDebugChar(buffer[1]);
+        count = strlen(buffer);
+        for (i = 3; i <= count; i++)
+        {
+          buffer[i - 3] = buffer[i];
+        }
+      }
+      flush_debug_buffer();
+    }
+  } while (checksum != xmitcsum);
+}
+
+
+void debug_loop(int vcpufd)
+{
+  //char *buffer;
+  char buffer[1024];
+  char obuf[4096];
+  int ne = 0;
+  //char mem[255];
+
+  while (ne == 0)
+  {
+    get_command(buffer);
+   // buffer = getpacket();
+
+      printf("command: %s\n", buffer);
+    switch (buffer[0])
+    {
+      case 'c':
+      {
+        put_reply("OK");
+        break;
+      }
+
+      case 's':
+      {
+        put_reply("OK");
+        break;
+      }
+
+      case 'M':
+      {
+        put_reply("OK");
+        break;
+      }
+
+      case 'm':
+      {
+        long addr;
+        int len;
+        char* ebuf;
+
+        addr = strtoull(&buffer[1], &ebuf, 16);
+        len = strtoul(ebuf + 1, NULL, 16);
+        printf("addr %Lx len %x\n", addr, len);
+
+        if ((addr + len) >= 0x20000000)
+            memset(obuf, '0', len);
+        else
+            mem2hex(mem + addr, obuf, len);
+        put_reply(obuf);
+        break;
+      }
+
+      case 'P':
+      {
+        put_reply("OK");
+        break;
+      }
+
+      case 'g':
+      {
+        struct kvm_regs regs;
+        struct kvm_sregs sregs;
+        int i, ret;
+
+        ret = ioctl(vcpufd, KVM_GET_REGS, &regs);
+        if (ret == -1)
+            err(1, "KVM_GET_REGS");
+
+        registers[RAX] = regs.rax;
+        registers[RBX] = regs.rbx;
+        registers[RCX] = regs.rcx;
+        registers[RDX] = regs.rdx;
+
+        registers[RSI] = regs.rsi;
+        registers[RDI] = regs.rdi;
+        registers[RBP] = regs.rbp;
+        registers[RSP] = regs.rsp;
+
+        registers[R8] = regs.r8;
+        registers[R9] = regs.r9;
+        registers[R10] = regs.r10;
+        registers[R11] = regs.r11;
+        registers[R12] = regs.r12;
+        registers[R13] = regs.r13;
+        registers[R14] = regs.r14;
+        registers[R15] = regs.r15;
+
+        registers[RIP] = regs.rip;
+        registers[EFLAGS] = regs.rflags;
+
+        //ret = ioctl(vcpufd, KVM_GET_SREGS, &sregs);
+        //if (ret == -1)
+        //     err(1, "KVM_GET_SREGS");
+
+        //registers[CS] = sregs.cs;
+        //registers[SS] = sregs.ss;
+
+        mem2hex ((char *) registers, obuf, NUMREGBYTES, 0);
+
+        put_reply(obuf);
+        break;
+      }
+
+      case '?':
+        sprintf(obuf, "S%02x", SIGTRAP);
+        put_reply(obuf);
+        break;
+
+      case 'H':
+        put_reply("OK");
+        break;
+
+      case 'q':
+        {
+          put_reply(""); /* not supported */
+        }
+        break;
+
+      case 'Z':
+        //do_breakpoint(1, buffer+1);
+        break;
+      case 'z':
+        //do_breakpoint(0, buffer+1);
+        break;
+      case 'k':
+        //BX_PANIC(("Debugger asked us to quit"));
+        break;
+      case 'D':
+        printf("Debugger detached\n");
+        put_reply("OK");
+        return;
+        break;
+
+      default:
+        put_reply("");
+        break;
+    }
+  }
+}
+
+
 /*
  * This function does all command procesing for interfacing to gdb.
  */
+#if 0
 void
 handle_exception (int exceptionVector)
 {
@@ -917,7 +1227,7 @@ handle_exception (int exceptionVector)
 	  if (stepping)
 	    registers[PS] |= 0x100;
 
-	  _returnFromException ();	/* this is a jump */
+	  //_returnFromException ();	/* this is a jump */
 	  break;
 
 	  /* kill the program */
@@ -934,6 +1244,7 @@ handle_exception (int exceptionVector)
       putpacket (remcomOutBuffer);
     }
 }
+#endif
 
 /* this function is used to set up exception handlers for tracing and
    breakpoints */
@@ -942,6 +1253,7 @@ set_debug_traps (void)
 {
   stackPtr = &remcomStack[STACKSIZE / sizeof (int) - 1];
 
+/*
   exceptionHandler (0, _catchException0);
   exceptionHandler (1, _catchException1);
   exceptionHandler (3, _catchException3);
@@ -957,7 +1269,7 @@ set_debug_traps (void)
   exceptionHandler (13, _catchException13);
   exceptionHandler (14, _catchException14);
   exceptionHandler (16, _catchException16);
-
+*/
   initialized = 1;
 }
 

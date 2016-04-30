@@ -209,6 +209,7 @@ struct _kvm_segment {
 #define KVM_32BIT_GAP_SIZE    (768 << 20)
 #define KVM_32BIT_GAP_START    (KVM_32BIT_MAX_MEM_SIZE - KVM_32BIT_GAP_SIZE)
 
+void gdb_stub_start();
 
 ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
 {
@@ -813,6 +814,7 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
 
         switch (run->exit_reason) {
         case KVM_EXIT_HLT: {
+
             puts("KVM_EXIT_HLT");
             //get_and_dump_sregs(vcpufd);
             return 0;
@@ -824,6 +826,10 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
     
             switch (run->io.port) {
             case UKVM_PORT_PUTS:
+
+                // XXX move somewhere else
+                gdb_stub_start(vcpufd);
+
                 ukvm_port_puts(mem, data);
                 break;
             case UKVM_PORT_NANOSLEEP:
@@ -936,11 +942,11 @@ int tun_alloc(char *dev, int flags)
     return fd;
 }
 
+uint8_t *mem;
 
 int main(int argc, char **argv)
 {
     int kvm, vmfd, vcpufd, diskfd, netfd, ret;
-    uint8_t *mem;
     uint8_t *tss_addr;
     struct kvm_sregs sregs;
     struct kvm_run *run;
