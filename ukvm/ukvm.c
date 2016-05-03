@@ -210,6 +210,7 @@ struct _kvm_segment {
 #define KVM_32BIT_GAP_START    (KVM_32BIT_MAX_MEM_SIZE - KVM_32BIT_GAP_SIZE)
 
 void gdb_stub_start();
+void debug_loop(int vcpufd, int sig);
 
 ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
 {
@@ -807,12 +808,30 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
                      int diskfd, int netfd)
 {
     int ret;
-    
+    int use_gdb = 1;
+
+    if (use_gdb) {
+        struct kvm_guest_debug debug = {
+            .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP,
+        };
+
+        if (ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &debug) < 0)
+            printf("KVM_SET_GUEST_DEBUG failed");
+
+        gdb_stub_start(vcpufd);
+    }
+
     /* Repeatedly run code and handle VM exits. */
     while (1) {
         ret = ioctl(vcpufd, KVM_RUN, NULL);
 
         switch (run->exit_reason) {
+        case KVM_EXIT_DEBUG: {
+            struct kvm_debug_exit_arch *arch_info = &run->debug.arch;
+            if (arch_info->pc == 0x0000000000106760)
+                debug_loop(vcpufd, 1);
+            break;
+        }
         case KVM_EXIT_HLT: {
 
             puts("KVM_EXIT_HLT");
@@ -826,10 +845,6 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
     
             switch (run->io.port) {
             case UKVM_PORT_PUTS:
-
-                // XXX move somewhere else
-                gdb_stub_start(vcpufd);
-
                 ukvm_port_puts(mem, data);
                 break;
             case UKVM_PORT_NANOSLEEP:

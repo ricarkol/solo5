@@ -188,12 +188,12 @@ static void wait_for_connect(int portn)
 }
 
 
-void debug_loop(int);
+void debug_loop(int, int);
 
 void gdb_stub_start(int vcpufd)
 {
     wait_for_connect(1234);
-    debug_loop(vcpufd);
+    debug_loop(vcpufd, 0);
 }
 
 static char buf[4096], *bufptr = buf;
@@ -926,13 +926,19 @@ static void get_command(char* buffer)
 }
 
 
-void debug_loop(int vcpufd)
+void debug_loop(int vcpufd, int sig)
 {
   //char *buffer;
   char buffer[1024];
   char obuf[4096];
   int ne = 0;
+  int stepping;
   //char mem[255];
+
+  if (sig != 0) {
+      snprintf(obuf, sizeof(obuf), "S%02x", 5);
+      put_reply(obuf);
+  }
 
   while (ne == 0)
   {
@@ -942,17 +948,26 @@ void debug_loop(int vcpufd)
       printf("command: %s\n", buffer);
     switch (buffer[0])
     {
-      case 'c':
-      {
-        put_reply("OK");
-        break;
-      }
 
-      case 's':
-      {
-        put_reply("OK");
-        break;
-      }
+	case 's':
+	  stepping = 1;
+	case 'c':
+	  /* try to read optional parameter, pc unchanged if no parm */
+	 // if (hexToLong (&ptr, &addr))
+	   // registers[PC] = addr;
+
+	 // newPC = registers[PC];
+
+	if (stepping) {
+            struct kvm_guest_debug debug = {
+                    .control        = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP,
+            };
+
+            if (ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &debug) < 0)
+                    err("KVM_SET_GUEST_DEBUG failed");
+        }
+
+        goto continue_to_program;
 
       case 'M':
       {
@@ -1064,6 +1079,9 @@ void debug_loop(int vcpufd)
         break;
     }
   }
+
+continue_to_program:
+  return;
 }
 
 

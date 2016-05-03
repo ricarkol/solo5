@@ -50,7 +50,6 @@ void kernel_main(uint64_t size, uint64_t kernel_end) {
     //void ping_forever(void);
     //ping_forever();
 
-    for(;;);
     start_kernel();
 
     //ping_serve();
