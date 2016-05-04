@@ -25,7 +25,7 @@ void blk_test(void);
 
 int var = 1234;
 
-static void banner(void) {
+void banner(void) {
     printf("            |      ___|  \n");
     printf("  __|  _ \\  |  _ \\ __ \\  \n");
     printf("\\__ \\ (   | | (   |  ) | \n");

@@ -110,6 +110,10 @@
 static int listen_socket_fd;
 static int socket_fd;
 
+#define MAX_BREAKPOINTS    8
+static uint64_t breakpoints[MAX_BREAKPOINTS];
+
+
 static void wait_for_connect(int portn)
 {
   struct sockaddr_in sockaddr;
@@ -188,12 +192,16 @@ static void wait_for_connect(int portn)
 }
 
 
-void debug_loop(int, int);
+void gdb_handle_exception(int, int);
 
 void gdb_stub_start(int vcpufd)
 {
+    int i;
+    for (i = 0; i < MAX_BREAKPOINTS; i++)
+        breakpoints[i] = 0;
+
     wait_for_connect(1234);
-    debug_loop(vcpufd, 0);
+    gdb_handle_exception(vcpufd, 0);
 }
 
 static char buf[4096], *bufptr = buf;
@@ -926,10 +934,44 @@ static void get_command(char* buffer)
 }
 
 
-void debug_loop(int vcpufd, int sig)
+int gdb_is_pc_breakpointing(uint64_t addr)
 {
-  //char *buffer;
-  char buffer[1024];
+    int i;
+    for (i = 0; i < MAX_BREAKPOINTS; i++) {
+        if (addr == breakpoints[i])
+            return 1;
+    }
+    return 0;
+}
+
+
+int gdb_insert_breakpoint(uint64_t addr)
+{
+     int i;
+     for (i = 0; i < MAX_BREAKPOINTS; i++) {
+         if (breakpoints[i] == 0) {
+             breakpoints[i] = addr;
+             return 1;
+         }
+     }
+     return 0;
+}
+
+int gdb_remove_breakpoint(uint64_t addr)
+{
+    //if (addr == 0x104c7d)
+    int i;
+    for (i = 0; i < MAX_BREAKPOINTS; i++) {
+        if (addr == breakpoints[i])
+            breakpoints[i] = 0;
+    }
+    return 0;
+}
+
+void gdb_handle_exception(int vcpufd, int sig)
+{
+  char *buffer;
+  //char buffer[1024];
   char obuf[4096];
   int ne = 0;
   int stepping;
@@ -942,10 +984,10 @@ void debug_loop(int vcpufd, int sig)
 
   while (ne == 0)
   {
-    get_command(buffer);
-   // buffer = getpacket();
+    //get_command(buffer);
+    buffer = getpacket();
 
-      printf("command: %s\n", buffer);
+    printf("command: %s\n", buffer);
     switch (buffer[0])
     {
 
@@ -977,7 +1019,7 @@ void debug_loop(int vcpufd, int sig)
 
       case 'm':
       {
-        long addr;
+        uint64_t addr;
         int len;
         char* ebuf;
 
@@ -1059,14 +1101,26 @@ void debug_loop(int vcpufd, int sig)
         }
         break;
 
-      case 'Z':
-        //do_breakpoint(1, buffer+1);
+      case 'Z': {
+        char* ebuf;
+        uint64_t type = strtoul(buffer+1, &ebuf, 16);
+        uint64_t addr = strtoull(ebuf+1, &ebuf, 16);
+        uint64_t len = strtoul(ebuf+1, &ebuf, 16);
+
+        printf("inserting breakpoint addr %Lx\n", addr);
+        gdb_insert_breakpoint(addr);
+
+        // insert a breakpoint
+        put_reply("OK");
         break;
+      }
       case 'z':
-        //do_breakpoint(0, buffer+1);
+        // remove a breakpoint
+        put_reply("OK");
         break;
       case 'k':
-        //BX_PANIC(("Debugger asked us to quit"));
+        printf("Debugger asked us to quit\n");
+        exit(1);
         break;
       case 'D':
         printf("Debugger detached\n");
@@ -1090,7 +1144,7 @@ continue_to_program:
  */
 #if 0
 void
-handle_exception (int exceptionVector)
+gdb_handle_exception (int exceptionVector)
 {
   int sigval, stepping;
   long addr;

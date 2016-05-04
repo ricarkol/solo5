@@ -210,7 +210,8 @@ struct _kvm_segment {
 #define KVM_32BIT_GAP_START    (KVM_32BIT_MAX_MEM_SIZE - KVM_32BIT_GAP_SIZE)
 
 void gdb_stub_start();
-void debug_loop(int vcpufd, int sig);
+void gdb_handle_exception(int vcpufd, int sig);
+int gdb_is_pc_breakpointing(long addr);
 
 ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
 {
@@ -811,6 +812,7 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
     int use_gdb = 1;
 
     if (use_gdb) {
+        // TODO check if we have the KVM_CAP_SET_GUEST_DEBUG capbility
         struct kvm_guest_debug debug = {
             .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP,
         };
@@ -828,12 +830,11 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
         switch (run->exit_reason) {
         case KVM_EXIT_DEBUG: {
             struct kvm_debug_exit_arch *arch_info = &run->debug.arch;
-            if (arch_info->pc == 0x0000000000106760)
-                debug_loop(vcpufd, 1);
+            if (gdb_is_pc_breakpointing(arch_info->pc))
+                gdb_handle_exception(vcpufd, 1);
             break;
         }
         case KVM_EXIT_HLT: {
-
             puts("KVM_EXIT_HLT");
             //get_and_dump_sregs(vcpufd);
             return 0;
