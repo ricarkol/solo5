@@ -95,7 +95,6 @@ struct ukvm_blkinfo blkinfo;
  */
 
 
-#define GUEST_SIZE      0x20000000 // 512 MBs
 #define GUEST_PAGE_SIZE 0x200000   // 2 MB pages in guest
 
 #define BOOT_IST    0x3000
@@ -957,13 +956,16 @@ int main(int argc, char **argv)
     uint64_t elf_entry;
     uint64_t kernel_end;
     char tun_name[IFNAMSIZ];
+    int use_gdb = 0;
 
-    if (argc != 4)
-        err(1, "usage: ukvm <elf> <disk.img> <net_iface>");
+    if (argc < 4)
+        err(1, "usage: ukvm <elf> <disk.img> <net_iface> [--gdb]");
 
     const char *elffile = argv[1];
     const char *diskfile = argv[2];
     const char *netiface = argv[3];
+    if (argc >= 5)
+        use_gdb = strcmp(argv[4], "--gdb") == 0;
 
     /* set up virtual disk */
     diskfd = open(diskfile, O_RDWR);
@@ -1086,8 +1088,6 @@ int main(int argc, char **argv)
     ret = pthread_create(&event_thread, NULL, event_loop, (void *) run);
     if (ret)
         err(1, "couldn't create event thread");
-
-    int use_gdb = 1;
 
     if (use_gdb) {
         // TODO check if we have the KVM_CAP_SET_GUEST_DEBUG capbility
