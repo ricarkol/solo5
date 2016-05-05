@@ -809,19 +809,6 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
                      int diskfd, int netfd)
 {
     int ret;
-    int use_gdb = 1;
-
-    if (use_gdb) {
-        // TODO check if we have the KVM_CAP_SET_GUEST_DEBUG capbility
-        struct kvm_guest_debug debug = {
-            .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP,
-        };
-
-        if (ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &debug) < 0)
-            printf("KVM_SET_GUEST_DEBUG failed");
-
-        gdb_stub_start(vcpufd);
-    }
 
     /* Repeatedly run code and handle VM exits. */
     while (1) {
@@ -1100,6 +1087,19 @@ int main(int argc, char **argv)
     if (ret)
         err(1, "couldn't create event thread");
 
+    int use_gdb = 1;
+
+    if (use_gdb) {
+        // TODO check if we have the KVM_CAP_SET_GUEST_DEBUG capbility
+        struct kvm_guest_debug debug = {
+            .control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP,
+        };
+
+        if (ioctl(vcpufd, KVM_SET_GUEST_DEBUG, &debug) < 0)
+            printf("KVM_SET_GUEST_DEBUG failed");
+
+        gdb_stub_start(vcpufd);
+    }
 
     return vcpu_loop(run, vcpufd, mem, diskfd, netfd);
 }
