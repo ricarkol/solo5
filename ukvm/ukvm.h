@@ -58,6 +58,20 @@ static inline uint32_t ukvm_ptr(volatile void *p) {
 
 #define UKVM_PORT_DBG_STACK 0x508
 
+#define UKVM_PORT_GETVAL    0x509
+#define UKVM_PORT_PUTVAL    0x50a
+
+/* UKVM_PORT_GETVAL */
+struct ukvm_getval {
+	/* OUT */
+	uint64_t value;
+};
+
+/* UKVM_PORT_PUTVAL */
+struct ukvm_putval {
+	/* IN */
+	uint64_t value;
+};
 
 /* UKVM_PORT_PUTS */
 struct ukvm_puts {

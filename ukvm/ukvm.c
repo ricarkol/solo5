@@ -49,6 +49,10 @@
 #include <net/if.h>
 #include <linux/if_tun.h>
 
+/* for gdb-chain */
+#include "gdb-chain.h"
+static int gfd;
+static const char *gdbchain;
 
 #include "processor-flags.h"
 #include "../kernel/interrupts.h"
@@ -841,6 +845,61 @@ void ukvm_port_dbg_stack(uint8_t *mem, int vcpufd){
     }
 }
 
+
+void ukvm_port_getval(uint8_t * mem, void *data)
+{
+    uint32_t mem_off = *(uint32_t *) data;
+    struct ukvm_getval *p = (struct ukvm_getval *) (mem + mem_off);
+    int ret;
+    struct sockaddr_un addr;
+    char buf[GDB_CHAIN_BUF_LEN];
+        
+    memset(buf, 0, GDB_CHAIN_BUF_LEN);
+    
+    gfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if ( gfd < 0 ) {
+        perror("Socket fd");
+        exit(1);
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, gdbchain, sizeof(addr.sun_path) - 1);
+
+    if ( connect(gfd, (struct sockaddr *)&addr, sizeof(addr)) ) {
+        perror("connect");
+        exit(1);
+    }
+
+    printf("Reading from %s\n", gdbchain);
+    ret = read(gfd, buf, sizeof(buf) - 1);
+    if ( ret <= 0 ) {
+        perror("Read error");
+        exit(1);
+    }
+    
+    p->value = strtoull(buf, NULL, 10);
+    printf("Got %ld\n", p->value);
+}
+void ukvm_port_putval(uint8_t * mem, void *data) {
+    uint32_t mem_off = *(uint32_t *) data;
+    struct ukvm_putval *p = (struct ukvm_putval *) (mem + mem_off);
+    char buf[GDB_CHAIN_BUF_LEN];
+    int ret;
+    int len;
+    
+    memset(buf, 0, GDB_CHAIN_BUF_LEN);
+    len = snprintf(buf, GDB_CHAIN_BUF_LEN, "%ld", p->value);
+    if ( len > GDB_CHAIN_BUF_LEN )
+        len = GDB_CHAIN_BUF_LEN;
+    
+    ret = write(gfd, buf, len);
+    if ( ret != len ) {
+        perror("Write error");
+        exit(1);
+    }
+}
+
 static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
                      int diskfd, int netfd)
 {
@@ -893,6 +952,12 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem,
                 break;
             case UKVM_PORT_DBG_STACK:
                 ukvm_port_dbg_stack(mem, vcpufd);
+                break;
+            case UKVM_PORT_GETVAL:
+                ukvm_port_getval(mem, data);
+                break;
+            case UKVM_PORT_PUTVAL:
+                ukvm_port_putval(mem, data);
                 break;
             default:
                 errx(1, "unhandled KVM_EXIT_IO (%x)", run->io.port);
@@ -992,12 +1057,13 @@ int main(int argc, char **argv)
     int use_gdb = 0;
 
     if (argc < 4)
-        err(1, "usage: ukvm <disk.img> <net_iface> <elf> [args] [--gdb]");
+        err(1, "usage: ukvm <disk.img> <net_iface> <gdb-chain> <elf> [args] [--gdb]");
 
     const char *diskfile = argv[1];
     const char *netiface = argv[2];
-    const char *elffile = argv[3];
-    if (argc >= 5)
+    gdbchain = argv[3];
+    const char *elffile = argv[4];
+    if (argc >= 6)
         use_gdb = strcmp(argv[argc - 1], "--gdb") == 0;
 
     /* set up virtual disk */

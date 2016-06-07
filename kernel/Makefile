@@ -74,7 +74,7 @@ kernel.h \
 ../loader/loader_info.h
 
 VIRTIO_TESTS=test_hello.virtio test_ping_serve.virtio
-UKVM_TESTS=test_hello.ukvm 
+UKVM_TESTS=test_hello.ukvm test_sequence.ukvm
 TESTS=$(VIRTIO_TESTS) $(UKVM_TESTS)
 
 all: virtio ukvm
