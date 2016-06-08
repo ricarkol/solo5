@@ -8,6 +8,7 @@
         exit(1);                                \
     } while(0)
 
+
 int main(int argc, char **argv) {
     int i;
     int fd[MAX_CHAIN_LEN];
@@ -15,7 +16,7 @@ int main(int argc, char **argv) {
     char *tosend;
         
     if ( argc < 3 )
-        ERROR("Usage %s <num> [socket paths...]\n", argv[0]);
+        ERROR("Usage %s <first arg (num)> [socket paths...]\n", argv[0]);
     
     if ( argc - 2 > MAX_CHAIN_LEN )
         ERROR("max chain len is %d\n", MAX_CHAIN_LEN);
@@ -41,6 +42,9 @@ int main(int argc, char **argv) {
             ERROR("couldn't listen to socket for %s\n", argv[i + 2]);
     }
 
+    gdb_proxy_wait_for_connect(1234);
+    gdb_proxy_handle_exception(0);
+    
     tosend = argv[1];
     memset(buf, 0, GDB_CHAIN_BUF_LEN);
 
