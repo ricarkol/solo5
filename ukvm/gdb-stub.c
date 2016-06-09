@@ -189,7 +189,7 @@ void gdb_stub_start(int vcpufd)
     for (i = 0; i < MAX_BREAKPOINTS; i++)
         breakpoints[i] = 0;
 
-    wait_for_connect(1234);
+    wait_for_connect(1235);
     gdb_handle_exception(vcpufd, 0);
 }
 

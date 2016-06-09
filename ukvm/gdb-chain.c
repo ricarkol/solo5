@@ -11,7 +11,7 @@
 
 int main(int argc, char **argv) {
     int i;
-    int fd[MAX_CHAIN_LEN];
+    int data_fd[MAX_CHAIN_LEN];
     char buf[GDB_CHAIN_BUF_LEN];
     char *tosend;
         
@@ -26,8 +26,8 @@ int main(int argc, char **argv) {
 
         printf("setting up [%d] at %s\n", i, argv[i + 2]);
         
-        fd[i] = socket(AF_UNIX, SOCK_STREAM, 0);
-        if ( fd < 0 )
+        data_fd[i] = socket(AF_UNIX, SOCK_STREAM, 0);
+        if ( data_fd[i] < 0 )
             ERROR("couldn't set up socket for %s\n", argv[i + 2]);
 
         memset(&addr, 0, sizeof(addr));
@@ -35,11 +35,14 @@ int main(int argc, char **argv) {
         strncpy(addr.sun_path, argv[i + 2], sizeof(addr.sun_path) - 1);
         unlink(argv[i + 2]);
         
-        if ( bind(fd[i], (struct sockaddr *)&addr, sizeof(addr)) )
+        if ( bind(data_fd[i], (struct sockaddr *)&addr, sizeof(addr)) )
             ERROR("couldn't bind to socket for %s\n", argv[i + 2]);
 
-        if ( listen(fd[i], 0) )
+        if ( listen(data_fd[i], 0) )
             ERROR("couldn't listen to socket for %s\n", argv[i + 2]);
+
+        if (gdb_proxy_connect_to_ukvm(i, 1235 + i) != 0)
+            ERROR("Could not connect to ukvm %d on port %d\n", i, 1235 + i);
     }
 
     gdb_proxy_wait_for_connect(1234);
@@ -52,9 +55,9 @@ int main(int argc, char **argv) {
         int ukvm;
         int ret;
         int len;
-        
+     
         printf("waiting to send %s to [%d] at %s\n", tosend, i, argv[i + 2]);
-        ukvm = accept(fd[i], NULL, NULL);
+        ukvm = accept(data_fd[i], NULL, NULL);
         if ( ukvm < 0 )
             ERROR("couldn't accept socket for %s\n", argv[i + 2]);
 
@@ -73,7 +76,5 @@ int main(int argc, char **argv) {
         tosend = buf;
     }
 
-    
-    
     return 0;
 }

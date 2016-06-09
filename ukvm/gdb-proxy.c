@@ -104,6 +104,14 @@
 #include <netdb.h>
 #include <assert.h>
 #include <linux/kvm.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h> 
 
 #include "ukvm.h"
 
@@ -115,6 +123,70 @@ static int stepping = 0;
 #define MAX_BREAKPOINTS    8
 static uint64_t breakpoints[MAX_BREAKPOINTS];
 
+#define BUFSIZE 1024
+#define MAX_CHAIN_LEN 10
+static int gdb_fd[MAX_CHAIN_LEN];
+
+int gdb_proxy_connect_to_ukvm(int ukvm_num, int portn)
+{
+    int sockfd, portno, n, r;
+    struct sockaddr_in serveraddr;
+    struct hostent *server;
+    char *hostname;
+    char buf[BUFSIZE];
+
+    assert(ukvm_num < MAX_CHAIN_LEN);
+
+    /* check command line arguments */
+    hostname = "localhost";
+    portno = portn;
+
+    /* socket: create the socket */
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    assert(sockfd > 0);
+
+    /* gethostbyname: get the server's DNS entry */
+    server = gethostbyname(hostname);
+    if (server == NULL) {
+        fprintf(stderr,"ERROR, no such host as %s\n", hostname);
+        exit(0);
+    }
+
+    /* build the server's Internet address */
+    bzero((char *) &serveraddr, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, 
+	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
+    serveraddr.sin_port = htons(portno);
+
+    /* connect: create a connection with the server */
+    r = connect(sockfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr));
+    if (r != 0) {
+        fprintf(stderr, "Could not connect to %s:%d\n", hostname, portn);
+        return 1;
+    }
+
+#if 0
+    /* get message line from the user */
+    printf("Please enter msg: ");
+    bzero(buf, BUFSIZE);
+    fgets(buf, BUFSIZE, stdin);
+
+    /* send the message line to the server */
+    n = write(sockfd, buf, strlen(buf));
+    assert(n >= 0);
+
+    /* print the server's reply */
+    bzero(buf, BUFSIZE);
+    n = read(sockfd, buf, BUFSIZE);
+    assert(n >= 0);
+    printf("Echo from server: %s", buf);
+#endif
+
+    printf("Connected to ukvm %d at %s:%d\n", ukvm_num, hostname, portn);
+    gdb_fd[ukvm_num] = sockfd;
+    return 0;
+}
 
 void gdb_proxy_wait_for_connect(int portn)
 {
@@ -182,7 +254,7 @@ void gdb_proxy_wait_for_connect(int portn)
 
 
 static char buf[4096], *bufptr = buf;
-static void flush_debug_buffer()
+static void flush_debug_buffer() 
 {
     char *p = buf;
     while (p != bufptr) {
@@ -482,12 +554,27 @@ int gdb_remove_breakpoint(uint64_t addr)
 }
 
 
-
-
 void gdb_get_mem(uint64_t addr, int len,
                  char *obuf /* OUT */)
 {
+    char buf[1024];
+    int n;
+    int ukvm_num = 0;
     printf("%s:%d\n", __FUNCTION__, __LINE__);
+
+    //sprintf(buf, "$m%ld,%d#aa", addr, len);
+    // $m0,10#2a
+    sprintf(buf, "$m0,10#2a\n");
+    /* send the message line to the server */
+    n = write(gdb_fd[ukvm_num], buf, strlen(buf));
+    assert(n >= 0);
+
+    /* print the server's reply */
+    bzero(obuf, BUFSIZE);
+    n = read(gdb_fd[ukvm_num], obuf, BUFSIZE);
+    assert(n >= 0);
+    printf("Echo from server: %s", obuf);
+
     #if 0    
     if ((addr + len) >= GUEST_SIZE)
         memset(obuf, '0', len);
