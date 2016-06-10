@@ -856,11 +856,13 @@ void ukvm_port_getval(uint8_t * mem, void *data)
         
     memset(buf, 0, GDB_CHAIN_BUF_LEN);
     
+    printf("ukvm_port_getval\n");
     gfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if ( gfd < 0 ) {
         perror("Socket fd");
         exit(1);
     }
+    printf("Connection established\n");
 
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;

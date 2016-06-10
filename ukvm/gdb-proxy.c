@@ -123,7 +123,7 @@ static int stepping = 0;
 #define MAX_BREAKPOINTS    8
 static uint64_t breakpoints[MAX_BREAKPOINTS];
 
-#define BUFSIZE 1024
+#define BUFSIZE 4096
 #define MAX_CHAIN_LEN 10
 static int gdb_fd[MAX_CHAIN_LEN];
 
@@ -601,42 +601,51 @@ void gdb_get_mem(uint64_t addr, int len,
 }
 
 void gdb_get_regs(char *obuf /* OUT */) {
+    char buf[4096], tbuf[4096];
+    int n;
+    int ukvm_num = 0;
+    int count;
+    char ch;
     struct kvm_regs regs;
     struct kvm_sregs sregs;
     int i, ret;
 
     printf("%s:%d\n", __FUNCTION__, __LINE__);
-#if 0
-    /* XXX forward to ukvm */
-    ret = ioctl(vcpufd, KVM_GET_REGS, &regs);
-    if (ret == -1)
-        err(1, "KVM_GET_REGS");
 
-    registers[RAX] = regs.rax;
-    registers[RBX] = regs.rbx;
-    registers[RCX] = regs.rcx;
-    registers[RDX] = regs.rdx;
+    unsigned char checksum = 0;
+    sprintf(tbuf, "g");
 
-    registers[RSI] = regs.rsi;
-    registers[RDI] = regs.rdi;
-    registers[RBP] = regs.rbp;
-    registers[RSP] = regs.rsp;
+    count = 0;
+    while (ch = tbuf[count]) {
+        checksum += ch;
+        count++;
+    }
 
-    registers[R8] = regs.r8;
-    registers[R9] = regs.r9;
-    registers[R10] = regs.r10;
-    registers[R11] = regs.r11;
-    registers[R12] = regs.r12;
-    registers[R13] = regs.r13;
-    registers[R14] = regs.r14;
-    registers[R15] = regs.r15;
+    sprintf(buf, "$%s#%c%c\n", tbuf,
+                             hexchars[checksum >> 4],
+                             hexchars[checksum % 16]);
 
-    registers[RIP] = regs.rip;
-    registers[EFLAGS] = regs.rflags;
+    // $g#67
+    printf("sending %s\n", buf);
 
-    // TODO what about others like cs and ss?
-#endif
-    mem2hex((char *) registers, obuf, NUMREGBYTES);
+    /* send the message line to the server */
+    n = write(gdb_fd[ukvm_num], buf, strlen(buf));
+    assert(n >= 0);
+
+    /* print the server's reply */
+    bzero(buf, NUMREGBYTES);
+    n = read(gdb_fd[ukvm_num], buf, NUMREGBYTES);
+    assert(n >= 0);
+    printf("Echo from server: %s\n", buf);
+
+    n = write(gdb_fd[ukvm_num], "++++", 5);
+    assert(n >= 0);
+
+    i = 0;
+    while (buf[i++] != '$');
+    memcpy(obuf, &buf[i], NUMREGBYTES);
+
+    //mem2hex((char *) registers, obuf, NUMREGBYTES);
 }
     
 void gdb_proxy_handle_exception(int sig)
