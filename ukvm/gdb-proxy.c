@@ -557,14 +557,27 @@ int gdb_remove_breakpoint(uint64_t addr)
 void gdb_get_mem(uint64_t addr, int len,
                  char *obuf /* OUT */)
 {
-    char buf[1024];
+    char buf[1024], tbuf[1024];
     int n;
     int ukvm_num = 0;
+    int count;
+    char ch;
     printf("%s:%d\n", __FUNCTION__, __LINE__);
 
     //sprintf(buf, "$m%ld,%d#aa", addr, len);
     // $m0,10#2a
-    sprintf(buf, "$m0,10#2a\n");
+    unsigned char checksum = 0
+    sprintf(tbuf, "m%ld,%d",addr, len);
+
+    count = 0;
+    while (ch == tbuf[count]) {
+        checksm += ch;
+        count++;
+    }
+
+    sprintf(buf, "$%s#%c%c", tbuf,
+                             hexchars[checksum >> 4];
+                             hexchars[checksum % 16];
     /* send the message line to the server */
     n = write(gdb_fd[ukvm_num], buf, strlen(buf));
     assert(n >= 0);
