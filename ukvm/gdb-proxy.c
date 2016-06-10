@@ -562,40 +562,42 @@ void gdb_get_mem(uint64_t addr, int len,
     int ukvm_num = 0;
     int count;
     char ch;
+    int i;
     printf("%s:%d\n", __FUNCTION__, __LINE__);
 
-    //sprintf(buf, "$m%ld,%d#aa", addr, len);
     // $m0,10#2a
-    unsigned char checksum = 0
+
+    unsigned char checksum = 0;
     sprintf(tbuf, "m%ld,%d",addr, len);
 
     count = 0;
-    while (ch == tbuf[count]) {
-        checksm += ch;
+    while (ch = tbuf[count]) {
+        checksum += ch;
         count++;
     }
 
-    sprintf(buf, "$%s#%c%c", tbuf,
-                             hexchars[checksum >> 4];
-                             hexchars[checksum % 16];
+    sprintf(buf, "$%s#%c%c\n", tbuf,
+                             hexchars[checksum >> 4],
+                             hexchars[checksum % 16]);
+
+    printf("sending %s\n", buf);
+
     /* send the message line to the server */
     n = write(gdb_fd[ukvm_num], buf, strlen(buf));
     assert(n >= 0);
 
     /* print the server's reply */
-    bzero(obuf, BUFSIZE);
-    n = read(gdb_fd[ukvm_num], obuf, BUFSIZE);
+    bzero(buf, BUFSIZE);
+    n = read(gdb_fd[ukvm_num], buf, BUFSIZE);
     assert(n >= 0);
-    printf("Echo from server: %s", obuf);
+    //printf("Echo from server: %s\n", obuf);
 
-    #if 0    
-    if ((addr + len) >= GUEST_SIZE)
-        memset(obuf, '0', len);
-    else {
-        /* XXX: forward to ukvm */
-        mem2hex(mem + addr, obuf, len);
-    }
-    #endif
+    n = write(gdb_fd[ukvm_num], "++++", 5);
+    assert(n >= 0);
+
+    i = 0;
+    while (buf[i++] != '$');
+    memcpy(obuf, &buf[i], len);
 }
 
 void gdb_get_regs(char *obuf /* OUT */) {
@@ -651,7 +653,7 @@ void gdb_proxy_handle_exception(int sig)
     while (ne == 0) {
         buffer = getpacket();
 
-        //printf("command: %s\n", buffer);
+        printf("command: %s\n", buffer);
         switch (buffer[0]) {
         case 's': {
             stepping = 1;

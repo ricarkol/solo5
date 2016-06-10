@@ -509,7 +509,7 @@ void gdb_handle_exception(int vcpufd, int sig)
     while (ne == 0) {
         buffer = getpacket();
 
-        //printf("command: %s\n", buffer);
+        printf("command: %s\n", buffer);
         switch (buffer[0]) {
         case 's': {
             stepping = 1;
