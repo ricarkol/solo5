@@ -123,9 +123,14 @@ static int stepping = 0;
 #define MAX_BREAKPOINTS    8
 static uint64_t breakpoints[MAX_BREAKPOINTS];
 
-#define BUFSIZE 4096
-#define MAX_CHAIN_LEN 10
-static int gdb_fd[MAX_CHAIN_LEN];
+#define BUFSIZE			4096
+#define MAX_CHAIN_LEN		10
+#define MAX_SOCKETS		(MAX_CHAIN_LEN + 1)
+#define SOCKET_TO_CLIENT	MAX_CHAIN_LEN
+
+static int gdb_fd[MAX_SOCKETS];
+static char *buf[MAX_SOCKETS];
+static char *bufptr[MAX_SOCKETS];
 
 int gdb_proxy_connect_to_ukvm(int ukvm_num, int portn)
 {
@@ -133,7 +138,6 @@ int gdb_proxy_connect_to_ukvm(int ukvm_num, int portn)
     struct sockaddr_in serveraddr;
     struct hostent *server;
     char *hostname;
-    char buf[BUFSIZE];
 
     assert(ukvm_num < MAX_CHAIN_LEN);
 
@@ -166,25 +170,14 @@ int gdb_proxy_connect_to_ukvm(int ukvm_num, int portn)
         return 1;
     }
 
-#if 0
-    /* get message line from the user */
-    printf("Please enter msg: ");
-    bzero(buf, BUFSIZE);
-    fgets(buf, BUFSIZE, stdin);
-
-    /* send the message line to the server */
-    n = write(sockfd, buf, strlen(buf));
-    assert(n >= 0);
-
-    /* print the server's reply */
-    bzero(buf, BUFSIZE);
-    n = read(sockfd, buf, BUFSIZE);
-    assert(n >= 0);
-    printf("Echo from server: %s", buf);
-#endif
-
     printf("Connected to ukvm %d at %s:%d\n", ukvm_num, hostname, portn);
     gdb_fd[ukvm_num] = sockfd;
+
+    // Setup the buffers
+    buf[ukvm_num] = malloc(BUFSIZE);
+    assert(buf[ukvm_num]);
+    bufptr[ukvm_num] = buf[ukvm_num];
+
     return 0;
 }
 
@@ -229,9 +222,16 @@ void gdb_proxy_wait_for_connect(int portn)
     socket_fd =
         accept(listen_socket_fd, (struct sockaddr *) &sockaddr,
                &sockaddr_len);
+
     if (socket_fd == -1) {
         perror("Failed to accept on socket");
     }
+
+    // setup the buffer pointers
+    buf[SOCKET_TO_CLIENT] = malloc(BUFSIZE);
+    assert(buf[SOCKET_TO_CLIENT]);
+    bufptr[SOCKET_TO_CLIENT] = buf[SOCKET_TO_CLIENT];
+
     close(listen_socket_fd);
 
     protoent = getprotobyname("tcp");
@@ -241,7 +241,7 @@ void gdb_proxy_wait_for_connect(int portn)
     }
 
     /* Disable Nagle - allow small packets to be sent without delay. */
-    opt = 1;
+    ;
     r = setsockopt(socket_fd, protoent->p_proto, TCP_NODELAY, &opt,
                    sizeof(opt));
     if (r == -1) {
@@ -250,38 +250,37 @@ void gdb_proxy_wait_for_connect(int portn)
     int ip = sockaddr.sin_addr.s_addr;
     printf("GDB Connected to %d.%d.%d.%d\n", ip & 0xff, (ip >> 8) & 0xff,
            (ip >> 16) & 0xff, (ip >> 24) & 0xff);
+    gdb_fd[SOCKET_TO_CLIENT] = socket_fd;
 }
 
-
-static char buf[4096], *bufptr = buf;
-static void flush_debug_buffer() 
+static void flush_debug_buffer(int num_sock)
 {
-    char *p = buf;
-    while (p != bufptr) {
-        int n = send(socket_fd, p, bufptr - p, 0);
+    char *p = buf[num_sock];
+    while (p != bufptr[num_sock]) {
+        int n = send(gdb_fd[num_sock], p, bufptr[num_sock] - p, 0);
         if (n == -1) {
-            perror("error on debug socket: %m");
+            perror("error on debug socket");
             break;
         }
         p += n;
     }
-    bufptr = buf;
+    bufptr[num_sock] = buf[num_sock];
 }
 
 
-void putDebugChar(int ch)
+void putDebugChar(int num_sock, int ch)
 {
-    if (bufptr == buf + sizeof buf)
-        flush_debug_buffer();
-    *bufptr++ = ch;
+ //   if (bufptr[num_sock] == &buf[num_sock] + sizeof buf[num_sock])
+        flush_debug_buffer(num_sock);
+    *bufptr[num_sock]++ = ch;
 }
 
 
-int getDebugChar()
+int getDebugChar(int num_sock)
 {
     char ch;
 
-    recv(socket_fd, &ch, 1, 0);
+    recv(gdb_fd[num_sock], &ch, 1, 0);
 
     return (ch);
 }
@@ -336,15 +335,15 @@ int hex(char ch)
 }
 
 
-static char remcomInBuffer[BUFMAX];
-static char remcomOutBuffer[BUFMAX];
+static char remcomInBuffer[MAX_SOCKETS][BUFMAX];
+static char remcomOutBuffer[MAX_SOCKETS][BUFMAX];
 
 
 /* scan for the sequence $<data>#<checksum>     */
 
-unsigned char *getpacket(void)
+unsigned char *getpacket(int num_sock)
 {
-    unsigned char *buffer = &remcomInBuffer[0];
+    unsigned char *buffer = &remcomInBuffer[num_sock][0];
     unsigned char checksum;
     unsigned char xmitcsum;
     int count;
@@ -352,7 +351,7 @@ unsigned char *getpacket(void)
 
     while (1) {
         /* wait around for the start character, ignore all other characters */
-        while ((ch = getDebugChar()) != '$');
+        while ((ch = getDebugChar(num_sock)) != '$');
 
       retry:
         checksum = 0;
@@ -361,7 +360,7 @@ unsigned char *getpacket(void)
 
         /* now, read until a # or end of buffer is found */
         while (count < BUFMAX - 1) {
-            ch = getDebugChar();
+            ch = getDebugChar(num_sock);
             if (ch == '$')
                 goto retry;
             if (ch == '#')
@@ -373,9 +372,9 @@ unsigned char *getpacket(void)
         buffer[count] = 0;
 
         if (ch == '#') {
-            ch = getDebugChar();
+            ch = getDebugChar(num_sock);
             xmitcsum = hex(ch) << 4;
-            ch = getDebugChar();
+            ch = getDebugChar(num_sock);
             xmitcsum += hex(ch);
 
             if (checksum != xmitcsum) {
@@ -384,14 +383,14 @@ unsigned char *getpacket(void)
                             "bad checksum.  My count = 0x%x, sent=0x%x. buf=%s\n",
                             checksum, xmitcsum, buffer);
                 }
-                putDebugChar('-');        /* failed checksum */
+                putDebugChar(num_sock, '-');        /* failed checksum */
             } else {
-                putDebugChar('+');        /* successful transfer */
+                putDebugChar(num_sock, '+');        /* successful transfer */
 
                 /* if a sequence char is present, reply the sequence ID */
                 if (buffer[2] == ':') {
-                    putDebugChar(buffer[0]);
-                    putDebugChar(buffer[1]);
+                    putDebugChar(num_sock, buffer[0]);
+                    putDebugChar(num_sock, buffer[1]);
 
                     return &buffer[3];
                 }
@@ -404,7 +403,7 @@ unsigned char *getpacket(void)
 
 /* send the packet in buffer.  */
 
-void putpacket(unsigned char *buffer)
+void putpacket(int num_sock, unsigned char *buffer)
 {
     unsigned char checksum;
     int count;
@@ -412,22 +411,22 @@ void putpacket(unsigned char *buffer)
 
     /*  $<packet info>#<checksum>.  */
     do {
-        putDebugChar('$');
+        putDebugChar(num_sock, '$');
         checksum = 0;
         count = 0;
 
         while (ch = buffer[count]) {
-            putDebugChar(ch);
+            putDebugChar(num_sock, ch);
             checksum += ch;
             count += 1;
         }
 
-        putDebugChar('#');
-        putDebugChar(hexchars[checksum >> 4]);
-        putDebugChar(hexchars[checksum % 16]);
-        flush_debug_buffer();
+        putDebugChar(num_sock, '#');
+        putDebugChar(num_sock, hexchars[checksum >> 4]);
+        putDebugChar(num_sock, hexchars[checksum % 16]);
+        flush_debug_buffer(num_sock);
     }
-    while (getDebugChar() != '+');
+    while (getDebugChar(num_sock) != '+');
 }
 
 void debug_error(char *format, char *parm)
@@ -557,95 +556,39 @@ int gdb_remove_breakpoint(uint64_t addr)
 void gdb_get_mem(uint64_t addr, int len,
                  char *obuf /* OUT */)
 {
-    char buf[1024], tbuf[1024];
-    int n;
+    char *buffer;
+    char tbuf[512];
     int ukvm_num = 0;
-    int count;
-    char ch;
-    int i;
     printf("%s:%d\n", __FUNCTION__, __LINE__);
 
     // $m0,10#2a
 
-    unsigned char checksum = 0;
     sprintf(tbuf, "m%ld,%d",addr, len);
 
-    count = 0;
-    while (ch = tbuf[count]) {
-        checksum += ch;
-        count++;
-    }
-
-    sprintf(buf, "$%s#%c%c\n", tbuf,
-                             hexchars[checksum >> 4],
-                             hexchars[checksum % 16]);
-
-    printf("sending %s\n", buf);
-
     /* send the message line to the server */
-    n = write(gdb_fd[ukvm_num], buf, strlen(buf));
-    assert(n >= 0);
+    putpacket(ukvm_num, tbuf);
 
-    /* print the server's reply */
-    bzero(buf, BUFSIZE);
-    n = read(gdb_fd[ukvm_num], buf, BUFSIZE);
-    assert(n >= 0);
-    //printf("Echo from server: %s\n", obuf);
+    buffer = getpacket(ukvm_num);
 
-    n = write(gdb_fd[ukvm_num], "++++", 5);
-    assert(n >= 0);
-
-    i = 0;
-    while (buf[i++] != '$');
-    memcpy(obuf, &buf[i], len);
+    memcpy(obuf, buffer, len);
 }
 
 void gdb_get_regs(char *obuf /* OUT */) {
-    char buf[4096], tbuf[4096];
-    int n;
     int ukvm_num = 0;
-    int count;
-    char ch;
-    struct kvm_regs regs;
-    struct kvm_sregs sregs;
-    int i, ret;
-
-    printf("%s:%d\n", __FUNCTION__, __LINE__);
-
-    unsigned char checksum = 0;
-    sprintf(tbuf, "g");
-
-    count = 0;
-    while (ch = tbuf[count]) {
-        checksum += ch;
-        count++;
-    }
-
-    sprintf(buf, "$%s#%c%c\n", tbuf,
-                             hexchars[checksum >> 4],
-                             hexchars[checksum % 16]);
+    char *buffer;
 
     // $g#67
-    printf("sending %s\n", buf);
 
     /* send the message line to the server */
-    n = write(gdb_fd[ukvm_num], buf, strlen(buf));
-    assert(n >= 0);
+    putpacket(ukvm_num, "g");
 
-    /* print the server's reply */
-    bzero(buf, NUMREGBYTES);
-    n = read(gdb_fd[ukvm_num], buf, NUMREGBYTES);
-    assert(n >= 0);
-    printf("Echo from server: %s\n", buf);
+    buffer = getpacket(ukvm_num);
 
-    n = write(gdb_fd[ukvm_num], "++++", 5);
-    assert(n >= 0);
+    printf("Echo from server: %s\n", buffer);
 
-    i = 0;
-    while (buf[i++] != '$');
-    memcpy(obuf, &buf[i], NUMREGBYTES);
+    memcpy(obuf, buffer, NUMREGBYTES * 2);
 
-    //mem2hex((char *) registers, obuf, NUMREGBYTES);
+    putDebugChar(ukvm_num, '+');
 }
     
 void gdb_proxy_handle_exception(int sig)
@@ -656,11 +599,14 @@ void gdb_proxy_handle_exception(int sig)
 
     if (sig != 0) {
         snprintf(obuf, sizeof(obuf), "S%02x", 5);
-        putpacket(obuf);
+        putpacket(SOCKET_TO_CLIENT, obuf);
     }
 
+    // XXX remove
+    //gdb_get_regs(obuf);
+
     while (ne == 0) {
-        buffer = getpacket();
+        buffer = getpacket(SOCKET_TO_CLIENT);
 
         printf("command: %s\n", buffer);
         switch (buffer[0]) {
@@ -674,7 +620,7 @@ void gdb_proxy_handle_exception(int sig)
             return; // Continue with program
         }
         case 'M': {
-            putpacket("OK");
+            putpacket(SOCKET_TO_CLIENT, "OK");
             break;
         }
         case 'm': {
@@ -688,32 +634,32 @@ void gdb_proxy_handle_exception(int sig)
             assert(sizeof(obuf) >= (len * 2) + 1);
 
             gdb_get_mem(addr, len, obuf);
-            putpacket(obuf);
+            putpacket(SOCKET_TO_CLIENT, obuf);
             
             break;
         }
         case 'P': {
-            putpacket("OK");
+            putpacket(SOCKET_TO_CLIENT, "OK");
             break;
         }
         case 'g': {
             assert(sizeof(obuf) >= (NUMREGBYTES * 2) + 1);
             gdb_get_regs(obuf);
-            putpacket(obuf);
+            putpacket(SOCKET_TO_CLIENT, obuf);
             break;
         }
         case '?': {
             sprintf(obuf, "S%02x", SIGTRAP);
-            putpacket(obuf);
+            putpacket(SOCKET_TO_CLIENT, obuf);
             break;
         }
         case 'H': {
-            putpacket("OK");
+            putpacket(SOCKET_TO_CLIENT, "OK");
             break;
         }
         case 'q': {
             // not supported
-            putpacket("");
+            putpacket(SOCKET_TO_CLIENT, "");
             break;
         }
         case 'Z': {
@@ -723,7 +669,7 @@ void gdb_proxy_handle_exception(int sig)
             uint64_t addr = strtoull(ebuf + 1, &ebuf, 16);
             uint64_t len = strtoull(ebuf + 1, &ebuf, 16);
             gdb_insert_breakpoint(addr);
-            putpacket("OK");
+            putpacket(SOCKET_TO_CLIENT, "OK");
             break;
         }
         case 'z': {
@@ -733,7 +679,7 @@ void gdb_proxy_handle_exception(int sig)
             uint64_t addr = strtoull(ebuf + 1, &ebuf, 16);
             uint64_t len = strtoull(ebuf + 1, &ebuf, 16);
             gdb_remove_breakpoint(addr);
-            putpacket("OK");
+            putpacket(SOCKET_TO_CLIENT, "OK");
             break;
         }
         case 'k': {
@@ -742,11 +688,11 @@ void gdb_proxy_handle_exception(int sig)
         }
         case 'D': {
             printf("Debugger detached\n");
-            putpacket("OK");
+            putpacket(SOCKET_TO_CLIENT, "OK");
             return;
         }
         default:
-            putpacket("");
+            putpacket(SOCKET_TO_CLIENT, "");
             break;
         }
     }

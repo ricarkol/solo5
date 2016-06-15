@@ -276,10 +276,8 @@ int hex(char ch)
     return (-1);
 }
 
-
 static char remcomInBuffer[BUFMAX];
 static char remcomOutBuffer[BUFMAX];
-
 
 /* scan for the sequence $<data>#<checksum>     */
 
