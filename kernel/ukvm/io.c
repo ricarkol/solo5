@@ -1,7 +1,8 @@
 #include "kernel.h"
 
 /* ukvm net interface */
-int solo5_net_write_sync(__attribute__((__unused__)) solo5_device *dev, __attribute__((__unused__)) uint64_t off, uint8_t *data, int n)
+int solo5_net_write_sync(_UNUSED solo5_device * dev, _UNUSED uint64_t off,
+                         uint8_t *data, int n)
 {
     volatile struct ukvm_netwrite wr;
 
@@ -9,7 +10,7 @@ int solo5_net_write_sync(__attribute__((__unused__)) solo5_device *dev, __attrib
     wr.len = n;
     wr.ret = 0;
 
-    // TODO: get the port associated with device *dev
+    /* TODO: get the port associated with device * dev */
 
     outl(UKVM_PORT_NETWRITE, ukvm_ptr(&wr));
     cc_barrier();
@@ -17,7 +18,9 @@ int solo5_net_write_sync(__attribute__((__unused__)) solo5_device *dev, __attrib
     return wr.ret;
 }
 
-int solo5_net_read_sync(__attribute__((__unused__)) solo5_device *dev, __attribute__((__unused__)) uint64_t off, uint8_t *data, int *n)
+int solo5_net_read_sync(_UNUSED solo5_device * dev,
+                        _UNUSED uint64_t off,
+                        uint8_t *data, int *n)
 {
     volatile struct ukvm_netread rd;
 
@@ -34,7 +37,7 @@ int solo5_net_read_sync(__attribute__((__unused__)) solo5_device *dev, __attribu
 }
 
 static char mac_str[18];
-char *solo5_net_mac_str(__attribute__((__unused__)) solo5_device *dev)
+char *solo5_net_mac_str(_UNUSED solo5_device * dev)
 {
     volatile struct ukvm_netinfo info;
 
@@ -46,9 +49,11 @@ char *solo5_net_mac_str(__attribute__((__unused__)) solo5_device *dev)
 }
 
 /* ukvm block interface */
-solo5_request solo5_blk_write_async(__attribute__((__unused__)) solo5_device *dev, uint64_t sec, uint8_t *data, int n)
+solo5_request solo5_blk_write_async(_UNUSED solo5_device * dev,
+                                    uint64_t sec, uint8_t *data, int n)
 {
     solo5_request solo5_req;
+
     solo5_req._req = malloc(sizeof(struct ukvm_blkread));
     struct ukvm_blkwrite *wr = (struct ukvm_blkwrite *) solo5_req._req;
 
@@ -57,7 +62,7 @@ solo5_request solo5_blk_write_async(__attribute__((__unused__)) solo5_device *de
     wr->len = n;
     wr->ret = 0;
 
-    // TODO: get the port associated with device *dev
+    /* TODO: get the port associated with device * dev */
 
     outl(UKVM_PORT_BLKWRITE, ukvm_ptr(wr));
     cc_barrier();
@@ -75,16 +80,18 @@ int solo5_blk_write_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int n)
     events[dev->poll_event_idx] = SOLO5_POLL_IO_READY;
     solo5_poll(solo5_clock_monotonic() + 1e9, events, NULL);
 
-    // FIXME: check for errors or sometihng
+    /* FIXME: check for errors or sometihng */
     solo5_req = solo5_req;
 
     return 0;
 }
 
 
-solo5_request solo5_blk_read_async_submit(__attribute__((__unused__)) solo5_device *dev, uint64_t sec, int *n)
+solo5_request solo5_blk_read_async_submit(_UNUSED solo5_device *dev,
+                                          uint64_t sec, int *n)
 {
     solo5_request solo5_req;
+
     solo5_req._req = malloc(sizeof(struct ukvm_blkread));
     struct ukvm_blkread *rd = (struct ukvm_blkread *) solo5_req._req;
 
@@ -93,7 +100,7 @@ solo5_request solo5_blk_read_async_submit(__attribute__((__unused__)) solo5_devi
     rd->len = *n;
     rd->ret = 0;
 
-    // TODO: get the port associated with device *dev
+    /* TODO: get the port associated with device * dev */
 
     outl(UKVM_PORT_BLKREAD, ukvm_ptr(rd));
     cc_barrier();
@@ -101,7 +108,9 @@ solo5_request solo5_blk_read_async_submit(__attribute__((__unused__)) solo5_devi
     return solo5_req;
 }
 
-int solo5_blk_read_async_complete(__attribute__((__unused__)) solo5_device *dev, solo5_request solo5_req, uint8_t *data, int *n)
+int solo5_blk_read_async_complete(_UNUSED solo5_device *dev,
+                                  solo5_request solo5_req,
+                                  uint8_t *data, int *n)
 {
     struct ukvm_blkread *req = (struct ukvm_blkread *) solo5_req._req;
     int ret;
@@ -114,7 +123,8 @@ int solo5_blk_read_async_complete(__attribute__((__unused__)) solo5_device *dev,
     return ret;
 }
 
-int solo5_blk_write_async_complete(__attribute__((__unused__)) solo5_device *dev, solo5_request solo5_req, int *n)
+int solo5_blk_write_async_complete(_UNUSED solo5_device *dev,
+                                   solo5_request solo5_req, int *n)
 {
     struct ukvm_blkread *req = (struct ukvm_blkread *) solo5_req._req;
     int ret;
@@ -140,18 +150,18 @@ int solo5_blk_read_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int *n)
     events[dev->poll_event_idx] = SOLO5_POLL_IO_READY;
     solo5_poll(solo5_clock_monotonic() + 1e9, events, revents);
 
-    // FIXME: remove the printf
+    /* FIXME: remove the printf */
     printf("revents: %d %d\n", events[0], events[1]);
 
     assert(events[dev->poll_event_idx] == SOLO5_POLL_IO_READY);
     return solo5_blk_read_async_complete(dev, solo5_req, data, n);
 }
 
-int solo5_blk_sector_size(__attribute__((__unused__)) solo5_device *dev)
+int solo5_blk_sector_size(_UNUSED solo5_device *dev)
 {
     volatile struct ukvm_blkinfo info;
 
-    // TODO: get the port associated with device *dev
+    /* TODO: get the port associated with device * dev */
 
     outl(UKVM_PORT_BLKINFO, ukvm_ptr(&info));
     cc_barrier();
@@ -159,11 +169,11 @@ int solo5_blk_sector_size(__attribute__((__unused__)) solo5_device *dev)
     return info.sector_size;
 }
 
-uint64_t solo5_blk_sectors(__attribute__((__unused__)) solo5_device *dev)
+uint64_t solo5_blk_sectors(_UNUSED solo5_device *dev)
 {
     volatile struct ukvm_blkinfo info;
 
-    // TODO: get the port associated with device *dev
+    /* TODO: get the port associated with device * dev */
 
     outl(UKVM_PORT_BLKINFO, ukvm_ptr(&info));
     cc_barrier();
@@ -171,7 +181,7 @@ uint64_t solo5_blk_sectors(__attribute__((__unused__)) solo5_device *dev)
     return info.num_sectors;
 }
 
-int solo5_blk_rw(__attribute__((__unused__)) solo5_device *dev)
+int solo5_blk_rw(_UNUSED solo5_device *dev)
 {
     volatile struct ukvm_blkinfo info;
 

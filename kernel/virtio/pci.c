@@ -76,8 +76,8 @@ static void virtio_config(uint32_t config_addr)
     printf("virtio_config: device_id=%x, interrupt_line=%x\n", pci.device_id,
             pci.interrupt_line);
 
-    // FIXME: this assumes that all devices are PCI based, and that all of
-    // them use the same interrupt line
+    /* FIXME: this assumes that all devices are PCI based, and that all of */
+    /* them use the same interrupt line */
     for (i = 0; i < n; i++)
         solo5_devices[i].irq_num = pci.interrupt_line;
 

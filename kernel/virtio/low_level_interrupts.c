@@ -120,6 +120,7 @@ void low_level_handle_irq(int irq)
 {
     int i;
     int n = sizeof(solo5_devices) / sizeof(solo5_device);
+
     for (i = 0; i < n; i++) {
         if (solo5_devices[i].irq_num == irq) {
             solo5_devices[i].irq_handler();
