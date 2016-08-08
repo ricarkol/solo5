@@ -1,64 +1,41 @@
 #include "solo5.h"
 
-static uint8_t blk_sector[512];
-
-void *memset(void *s, int c, size_t n)
-{
-    unsigned char* p=s;
-    while(n--)
-        *p++ = (unsigned char)c;
-    return s;
-}
+#define SECTOR_SIZE	512
+static uint8_t sector_write[SECTOR_SIZE];
+static uint8_t sector_read[SECTOR_SIZE];
 
 int solo5_app_main(char *cmdline __attribute__((unused)))
 {
-    const char s[] = "test_blk\n";
-    int n = 512, i;
+    int n = SECTOR_SIZE;
+    int i;
     short events[SOLO5_NUM_DEVICES];
     short revents[SOLO5_NUM_DEVICES];
-    struct solo5_device_t *disk;
     solo5_request req;
-    int idx_first_blk = solo5_get_first_disk()->poll_event_idx;
+    solo5_device *disk = solo5_get_first_disk();
+    int idx_first_blk = disk->poll_event_idx;
 
-    memset(events, 0, SOLO5_NUM_DEVICES * sizeof(events));
-    events[idx_first_blk] = SOLO5_POLLIN;
+    for (i = 0; i < 10; i++)
+        sector_write[i] = '0' + i;
+    sector_write[10] = '\n';
 
-    disk = solo5_get_first_disk();
-
-    solo5_console_write(s, sizeof(s));
+    events[idx_first_blk] = SOLO5_POLL_IO_READY;
 
     // sync test
-    memset(blk_sector, 0, 512);
-    for (i = 0; i < 10; i++)
-        blk_sector[i] = '0' + i;
-    // wr
-    disk->sync_write(0, blk_sector, 512);
-    memset(blk_sector, 0, 512);
-    n = 512;
-    // rd
-    disk->sync_read(0, blk_sector, &n);
-    solo5_console_write((const char *) blk_sector, 10);
-    solo5_console_write("\n", 1);
+    solo5_blk_write_sync(disk, 0, sector_write, SECTOR_SIZE);
+    solo5_blk_read_sync(disk, 0, sector_read, &n);
+    solo5_console_write((const char *) sector_read, 11);
+
     // this one should timeout after a second as there are no more events
     solo5_poll(solo5_clock_monotonic() + 1e9, events, revents);
 
     // async test
-    memset(blk_sector, 0, 512);
-    for (i = 0; i < 10; i++)
-        blk_sector[i] = '0' + i;
-    // wr
-    req = disk->async_write(0, blk_sector, 512);
+    req = solo5_blk_write_async(disk, 0, sector_write, SECTOR_SIZE);
     solo5_poll(solo5_clock_monotonic() + 1e10, events, revents);
-    disk->async_write_result(req, &n);
-
-    memset(blk_sector, 0, 512);
-    n = 512;
-    req = disk->async_read(0, &n);
+    solo5_blk_write_async_complete(disk, req, &n);
+    req = solo5_blk_read_async_submit(disk, 0, &n);
     solo5_poll(solo5_clock_monotonic() + 1e10, events, revents);
-    // rd
-    disk->async_read_result(req, blk_sector, &n);
-    solo5_console_write((const char *) blk_sector, 10);
-    solo5_console_write("\n", 1);
+    solo5_blk_read_async_complete(disk, req, sector_read, &n);
+    solo5_console_write((const char *) sector_read, 11);
 
     return 0;
 }

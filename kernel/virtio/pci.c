@@ -67,7 +67,7 @@ static void virtio_config(uint32_t config_addr)
 {
     struct pci_config_info pci;
     int i;
-    int n = sizeof(solo5_devices) / sizeof(struct solo5_device_t);
+    int n = sizeof(solo5_devices) / sizeof(solo5_device);
 
     PCI_CONF_READ(uint16_t, &pci.device_id, config_addr, SUBSYS_ID);
     PCI_CONF_READ(uint16_t, &pci.iobar, config_addr, IOBAR);

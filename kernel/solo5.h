@@ -12,24 +12,22 @@
 int solo5_app_main(char *cmdline);
 
 /* Network */
-struct solo5_device_t *solo5_get_first_netiface(void);
-
-int solo5_net_write_sync(uint64_t unused, uint8_t *data, int n);
-int solo5_net_read_sync(uint64_t unused, uint8_t *data, int *n);
-char *solo5_net_mac_str(void);
+solo5_device *solo5_get_first_netiface(void);
+int solo5_net_write_sync(solo5_device *dev, uint64_t unused, uint8_t *data, int n);
+int solo5_net_read_sync(solo5_device *dev, uint64_t unused, uint8_t *data, int *n);
+char *solo5_net_mac_str(solo5_device *dev); 
 
 /* Block */
-struct solo5_device_t *solo5_get_first_disk(void);
-
-int solo5_blk_write_sync(uint64_t sec, uint8_t *data, int n);
-int solo5_blk_read_sync(uint64_t sec, uint8_t *data, int *n);
-solo5_request solo5_blk_write_async(uint64_t sec, uint8_t *data, int n);
-solo5_request solo5_blk_read_async_submit(uint64_t sec, int *n);
-int solo5_blk_read_async_complete(solo5_request req, uint8_t *data, int *n);
-int solo5_blk_write_async_complete(solo5_request req, int *n);
-int solo5_blk_sector_size(void);
-uint64_t solo5_blk_sectors(void);
-int solo5_blk_rw(void);
+solo5_device *solo5_get_first_disk(void);
+int solo5_blk_write_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int n);
+int solo5_blk_read_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int *n);
+solo5_request solo5_blk_write_async(solo5_device *dev, uint64_t sec, uint8_t *data, int n);
+solo5_request solo5_blk_read_async_submit(solo5_device *dev, uint64_t sec, int *n);
+int solo5_blk_read_async_complete(solo5_device *dev, solo5_request req, uint8_t *data, int *n);
+int solo5_blk_write_async_complete(solo5_device *dev, solo5_request req, int *n);
+int solo5_blk_sector_size(solo5_device *dev);
+uint64_t solo5_blk_sectors(solo5_device *dev);
+int solo5_blk_rw(solo5_device *dev);
 
 /* Console */
 int solo5_console_write(const char *buf, size_t n);
@@ -51,7 +49,7 @@ uint64_t solo5_clock_wall(void);
 /* solo5_poll(): Block until monotonic time reaches until_nsecs or I/O is
  * possible, whichever is sooner. Returns 1 if I/O is possible, otherwise 0.
  */
-#define SOLO5_POLLIN	1
+#define SOLO5_POLL_IO_READY	1
 int solo5_poll(uint64_t until_nsecs, short *events, short *revents);
 
 #endif
