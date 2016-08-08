@@ -13,21 +13,22 @@ int solo5_app_main(char *cmdline);
 
 /* Network */
 solo5_device *solo5_get_first_netiface(void);
-int solo5_net_write_sync(solo5_device *dev, uint64_t unused, uint8_t *data, int n);
-int solo5_net_read_sync(solo5_device *dev, uint64_t unused, uint8_t *data, int *n);
-char *solo5_net_mac_str(solo5_device *dev); 
+int solo5_net_write_sync(solo5_device *, uint64_t, uint8_t *, int);
+int solo5_net_read_sync(solo5_device *, uint64_t, uint8_t *, int *);
+char *solo5_net_mac_str(solo5_device *);
 
 /* Block */
 solo5_device *solo5_get_first_disk(void);
-int solo5_blk_write_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int n);
-int solo5_blk_read_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int *n);
-solo5_request solo5_blk_write_async(solo5_device *dev, uint64_t sec, uint8_t *data, int n);
-solo5_request solo5_blk_read_async_submit(solo5_device *dev, uint64_t sec, int *n);
-int solo5_blk_read_async_complete(solo5_device *dev, solo5_request req, uint8_t *data, int *n);
-int solo5_blk_write_async_complete(solo5_device *dev, solo5_request req, int *n);
-int solo5_blk_sector_size(solo5_device *dev);
-uint64_t solo5_blk_sectors(solo5_device *dev);
-int solo5_blk_rw(solo5_device *dev);
+int solo5_blk_write_sync(solo5_device *, uint64_t, uint8_t *, int);
+int solo5_blk_read_sync(solo5_device *, uint64_t, uint8_t *, int *);
+solo5_request solo5_blk_write_async(solo5_device *, uint64_t, uint8_t *, int);
+solo5_request solo5_blk_read_async_submit(solo5_device *, uint64_t, int *);
+int solo5_blk_read_async_complete(solo5_device *, solo5_request,
+                                  uint8_t *, int *);
+int solo5_blk_write_async_complete(solo5_device *, solo5_request, int *);
+int solo5_blk_sector_size(solo5_device *);
+uint64_t solo5_blk_sectors(solo5_device *);
+int solo5_blk_rw(solo5_device *);
 
 /* Console */
 int solo5_console_write(const char *buf, size_t n);
@@ -50,6 +51,6 @@ uint64_t solo5_clock_wall(void);
  * possible, whichever is sooner. Returns 1 if I/O is possible, otherwise 0.
  */
 #define SOLO5_POLL_IO_READY	1
-int solo5_poll(uint64_t until_nsecs, short *events, short *revents);
+int solo5_poll(uint64_t, short *, short *);
 
 #endif
