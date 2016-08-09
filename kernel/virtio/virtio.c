@@ -735,8 +735,6 @@ int virtio_blk_write_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int n)
     events[dev->poll_event_idx] = SOLO5_POLL_IO_READY;
     solo5_poll(solo5_clock_monotonic() + 1e9, events, revents);
 
-    printf("revents %d %d\n", revents[0], revents[1]);
-
     /* TODO */
     inflight_io_completed = 0;
 
@@ -792,8 +790,6 @@ int virtio_blk_read_sync(solo5_device *dev, uint64_t sec,
     memset(events, 0, SOLO5_NUM_DEVICES * sizeof(events));
     events[dev->poll_event_idx] = SOLO5_POLL_IO_READY;
     solo5_poll(solo5_clock_monotonic() + 1e9, events, revents);
-
-    printf("revents %d %d\n", revents[0], revents[1]);
 
     return virtio_blk_read_async_complete(solo5_req, data, len);
 }

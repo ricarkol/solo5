@@ -76,7 +76,7 @@ int solo5_poll(uint64_t until_nsecs, short *events, short *revents)
          */
         blk_event = (events[idx_first_blk] & SOLO5_POLL_IO_READY)
                     && virtio_blk_completed();
-        net_event = (events[idx_first_net] & SOLO5_POLL_IO_READY)
+        net_event = (events[idx_first_net] & SOLO5_POLLIN)
                     && virtio_net_pkt_poll();
         if (blk_event || net_event) {
             rc = 1;
@@ -88,7 +88,7 @@ int solo5_poll(uint64_t until_nsecs, short *events, short *revents)
     if (!rc) {
         blk_event = (events[idx_first_blk] & SOLO5_POLL_IO_READY)
                     && virtio_blk_completed();
-        net_event = (events[idx_first_net] & SOLO5_POLL_IO_READY)
+        net_event = (events[idx_first_net] & SOLO5_POLLIN)
                     && virtio_net_pkt_poll();
         rc = blk_event || net_event;
     }

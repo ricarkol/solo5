@@ -150,9 +150,6 @@ int solo5_blk_read_sync(solo5_device *dev, uint64_t sec, uint8_t *data, int *n)
     events[dev->poll_event_idx] = SOLO5_POLL_IO_READY;
     solo5_poll(solo5_clock_monotonic() + 1e9, events, revents);
 
-    /* FIXME: remove the printf */
-    printf("revents: %d %d\n", events[0], events[1]);
-
     assert(events[dev->poll_event_idx] == SOLO5_POLL_IO_READY);
     return solo5_blk_read_async_complete(dev, solo5_req, data, n);
 }

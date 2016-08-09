@@ -50,6 +50,7 @@ uint64_t solo5_clock_wall(void);
 /* solo5_poll(): Block until monotonic time reaches until_nsecs or I/O is
  * possible, whichever is sooner. Returns 1 if I/O is possible, otherwise 0.
  */
+#define SOLO5_POLLIN		1
 #define SOLO5_POLL_IO_READY	1
 int solo5_poll(uint64_t, short *, short *);
 
