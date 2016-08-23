@@ -91,8 +91,6 @@ struct pkt_buffer {
     uint8_t data[PKT_BUFFER_LEN];
     uint32_t len;
 };
-struct pkt_buffer xmit_bufs[128];
-struct pkt_buffer recv_bufs[128];
 
 #define VIRTIO_BLK_SECTOR_SIZE    512
 struct virtio_blk_hdr {
@@ -189,16 +187,19 @@ struct vring_used_elem *vring_used_elem_get(struct vring *vring, int i)
                                       + (i * sizeof(struct vring_used_elem)));
 }
 
-#define VRING_NET_QUEUE_SIZE 256
+#define VRING_NET_MAX_QUEUE_SIZE 4096
 
-static uint8_t recv_data[VRING_SIZE(VRING_NET_QUEUE_SIZE)] ALIGN_4K;
-static uint8_t xmit_data[VRING_SIZE(VRING_NET_QUEUE_SIZE)] ALIGN_4K;
+struct pkt_buffer xmit_bufs[VRING_NET_MAX_QUEUE_SIZE] ALIGN_4K;
+struct pkt_buffer recv_bufs[VRING_NET_MAX_QUEUE_SIZE] ALIGN_4K;
+
+static uint8_t recv_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
+static uint8_t xmit_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
 static struct vring recvq = {
-    .size = VRING_NET_QUEUE_SIZE,
+    .size = VRING_NET_MAX_QUEUE_SIZE,
     .vring = (void *)recv_data,
 };
 static struct vring xmitq = {
-    .size = VRING_NET_QUEUE_SIZE,
+    .size = VRING_NET_MAX_QUEUE_SIZE,
     .vring = (void *)xmit_data,
 };
 
@@ -303,7 +304,7 @@ static void check_xmit(void)
 {
     volatile struct vring_used_elem *e;
     struct vring_desc *desc;
-    int dbg = 0;
+    int dbg = 1;
 
     for (;;) {
         uint16_t data_idx;
@@ -333,7 +334,7 @@ static void recv_load_desc(void)
     desc = vring_desc_get(&recvq, recv_next_avail);
     desc->addr = (uint64_t)&virtio_net_hdr;
     desc->len = sizeof(virtio_net_hdr);
-    desc->next = recv_next_avail + 1;
+    desc->next = recv_next_avail + 1; // need to wrap up this
     desc->flags = VRING_DESC_F_NEXT | VRING_DESC_F_WRITE;
 
     /* and a separate one for the actual packet */
@@ -375,6 +376,8 @@ static void check_recv(void)
         /* record actual packet len */
         ((struct pkt_buffer *)desc->addr)->len = e->len
             - sizeof(struct virtio_net_hdr);
+
+        assert(e->len >= sizeof(struct virtio_net_hdr));
 
         if (0) {
             printf("recv pkt:\n");
@@ -420,7 +423,7 @@ int virtio_net_xmit_packet(void *data, int len)
 {
     struct vring_desc *desc;
     struct vring_avail *avail;
-    int dbg = 0;
+    int dbg = 1;
 
     if (((xmit_next_avail + 2) % xmitq.size)
         == ((xmit_last_used * 2) % xmitq.size)) {
@@ -471,7 +474,7 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
     struct vring_desc *desc;
     struct vring_avail *avail;
     struct virtio_blk_req *req;
-    int dbg = 0;
+    int dbg = 1;
 
     if (((blk_next_avail + 3) % blkq.size)
         == ((blk_last_used * 3) % blkq.size)) {
@@ -620,9 +623,8 @@ void virtio_config_network(uint16_t base)
 {
     uint8_t ready_for_init = VIRTIO_PCI_STATUS_ACK | VIRTIO_PCI_STATUS_DRIVER;
     uint32_t host_features, guest_features;
-    uint16_t queue_size;
     int i;
-    int dbg = 0;
+    int dbg = 1;
 
     outb(base + VIRTIO_PCI_STATUS, ready_for_init);
 
@@ -662,12 +664,12 @@ void virtio_config_network(uint16_t base)
              virtio_net_mac[4],
              virtio_net_mac[5]);
 
-    /* check that 2 256 entry virtqueues are here (recv and transmit) */
-    for (i = 0; i < 2; i++) {
-        outw(base + VIRTIO_PCI_QUEUE_SEL, i);
-        queue_size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-        assert(queue_size == VRING_NET_QUEUE_SIZE);
-    }
+    /* get the size of the virt queues */
+    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
+    recvq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
+    xmitq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    printf("queue_sizes %d %d\n", recvq.size, xmitq.size);
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
 
@@ -836,11 +838,15 @@ int solo5_net_read_sync(uint8_t *data, int *n)
     uint8_t *pkt;
     int len = *n;
 
+    printf("len=%d PKT=%d\n", len, PKT_BUFFER_LEN);
+    //assert(len <= PKT_BUFFER_LEN);
+
     pkt = virtio_net_pkt_get(&len);
     if (!pkt)
         return -1;
 
     assert(len <= *n);
+    memset(data, 0, *n);
     *n = len;
 
     /* also, it's clearly not zero copy */
