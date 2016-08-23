@@ -91,8 +91,6 @@ struct pkt_buffer {
     uint8_t data[PKT_BUFFER_LEN];
     uint32_t len;
 };
-struct pkt_buffer xmit_bufs[128];
-struct pkt_buffer recv_bufs[128];
 
 #define VIRTIO_BLK_SECTOR_SIZE    512
 struct virtio_blk_hdr {
@@ -189,16 +187,22 @@ struct vring_used_elem *vring_used_elem_get(struct vring *vring, int i)
                                       + (i * sizeof(struct vring_used_elem)));
 }
 
-#define VRING_NET_QUEUE_SIZE 256
+#define VRING_NET_MAX_QUEUE_SIZE 4096
+//#define VRING_NET_MAX_QUEUE_SIZE 256
 
-static uint8_t recv_data[VRING_SIZE(VRING_NET_QUEUE_SIZE)] ALIGN_4K;
-static uint8_t xmit_data[VRING_SIZE(VRING_NET_QUEUE_SIZE)] ALIGN_4K;
+struct pkt_buffer xmit_bufs[(VRING_NET_MAX_QUEUE_SIZE) / 2];
+struct pkt_buffer recv_bufs[(VRING_NET_MAX_QUEUE_SIZE) / 2];
+
+//static uint8_t recv_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
+//static uint8_t xmit_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
+static uint8_t recv_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
+static uint8_t xmit_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
 static struct vring recvq = {
-    .size = VRING_NET_QUEUE_SIZE,
+    //.size = VRING_NET_MAX_QUEUE_SIZE,
     .vring = (void *)recv_data,
 };
 static struct vring xmitq = {
-    .size = VRING_NET_QUEUE_SIZE,
+    //.size = VRING_NET_MAX_QUEUE_SIZE,
     .vring = (void *)xmit_data,
 };
 
@@ -666,7 +670,11 @@ void virtio_config_network(uint16_t base)
     for (i = 0; i < 2; i++) {
         outw(base + VIRTIO_PCI_QUEUE_SEL, i);
         queue_size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-        assert(queue_size == VRING_NET_QUEUE_SIZE);
+        printf("queue_size %d\n", queue_size);
+        //assert(queue_size == VRING_NET_MAX_QUEUE_SIZE);
+
+        recvq.size = queue_size;
+        xmitq.size = queue_size;
     }
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);

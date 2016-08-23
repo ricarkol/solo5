@@ -250,7 +250,7 @@ void solo5_ping_serve(void)
     uint8_t *pkt = NULL;
     int i;
 
-    printf("Serving ping on %d.%d.%d.%d\n",
+    printf("2. Serving ping on %d.%d.%d.%d\n",
            virtio_net_ip[0],
            virtio_net_ip[1],
            virtio_net_ip[2],
@@ -270,6 +270,7 @@ void solo5_ping_serve(void)
 
         p = (struct pingpkt *)pkt;
 
+        printf("got something\n");
         if (memcmp(p->ether.target, virtio_net_mac, HLEN_ETHER))
             goto out; /* not ether addressed to us */
 

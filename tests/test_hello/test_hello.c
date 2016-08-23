@@ -2,7 +2,7 @@
 
 int solo5_app_main(char *cmdline)
 {
-    const char s[] = "Hello, World\nCommand line is: ";
+    const char s[] = "Hello, World 1\nCommand line is: ";
 
     solo5_console_write(s, sizeof(s));
 

@@ -125,7 +125,7 @@ void low_level_handle_irq(int irq)
     case 0: /* PIT */
         break;
     default:
-        printf("got irq %d at 0x%lx\n", irq,
+        printf("got irq %x at 0x%lx\n", irq,
                solo5_clock_monotonic());
     }
 
