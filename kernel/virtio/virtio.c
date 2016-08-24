@@ -61,6 +61,28 @@
 #define VIRTIO_NET_F_GUEST_CSUM	1 /* Guest handles pkts w/ partial csum */
 #define VIRTIO_NET_F_MAC (1 << 5) /* Host has given MAC address. */
 
+/* The feature bitmap for virtio net */
+#define VIRTIO_NET_F_CSUM	0	/* Host handles pkts w/ partial csum */
+#define VIRTIO_NET_F_GUEST_CSUM	1	/* Guest handles pkts w/ partial csum */
+#define VIRTIO_NET_F_CTRL_GUEST_OFFLOADS 2 /* Dynamic offload configuration. */
+//#define VIRTIO_NET_F_MAC	5	/* Host has given MAC address. */
+#define VIRTIO_NET_F_GUEST_TSO4	7	/* Guest can handle TSOv4 in. */
+#define VIRTIO_NET_F_GUEST_TSO6	8	/* Guest can handle TSOv6 in. */
+#define VIRTIO_NET_F_GUEST_ECN	9	/* Guest can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_GUEST_UFO	10	/* Guest can handle UFO in. */
+#define VIRTIO_NET_F_HOST_TSO4	11	/* Host can handle TSOv4 in. */
+#define VIRTIO_NET_F_HOST_TSO6	12	/* Host can handle TSOv6 in. */
+#define VIRTIO_NET_F_HOST_ECN	13	/* Host can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_HOST_UFO	14	/* Host can handle UFO in. */
+#define VIRTIO_NET_F_MRG_RXBUF	15	/* Host can merge receive buffers. */
+#define VIRTIO_NET_F_STATUS	16	/* virtio_net_config.status available */
+#define VIRTIO_NET_F_CTRL_VQ	17	/* Control channel available */
+#define VIRTIO_NET_F_CTRL_RX	18	/* Control channel RX mode support */
+#define VIRTIO_NET_F_CTRL_VLAN	19	/* Control channel VLAN filtering */
+#define VIRTIO_NET_F_CTRL_RX_EXTRA 20	/* Extra RX mode control support */
+#define VIRTIO_NET_F_GUEST_ANNOUNCE 21	/* Guest can announce device on the
+					 * network */
+#define VIRTIO_NET_F_CTRL_MAC_ADDR 23	/* Set MAC address */
 
 /* Buffer continues via the next field. */
 #define VRING_DESC_F_NEXT     1
@@ -188,23 +210,27 @@ struct vring_used_elem *vring_used_elem_get(struct vring *vring, int i)
 }
 
 #define VRING_NET_MAX_QUEUE_SIZE 4096
+//#define VRING_NET_MAX_QUEUE_SIZE 0x8000
 //#define VRING_NET_MAX_QUEUE_SIZE 256
 
-struct pkt_buffer xmit_bufs[(VRING_NET_MAX_QUEUE_SIZE) / 2];
-struct pkt_buffer recv_bufs[(VRING_NET_MAX_QUEUE_SIZE) / 2];
+//struct pkt_buffer xmit_bufs[(VRING_NET_MAX_QUEUE_SIZE) / 2];
+//struct pkt_buffer recv_bufs[(VRING_NET_MAX_QUEUE_SIZE) / 2];
+struct pkt_buffer *xmit_bufs;
+struct pkt_buffer *recv_bufs;
 
-//static uint8_t recv_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
-//static uint8_t xmit_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
 static uint8_t recv_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
 static uint8_t xmit_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
-static struct vring recvq = {
-    //.size = VRING_NET_MAX_QUEUE_SIZE,
-    .vring = (void *)recv_data,
-};
-static struct vring xmitq = {
-    //.size = VRING_NET_MAX_QUEUE_SIZE,
-    .vring = (void *)xmit_data,
-};
+#if (0)
+	static struct vring recvq = {
+	    .vring = (void *)recv_data,
+	};
+	static struct vring xmitq = {
+	    .vring = (void *)xmit_data,
+	};
+#else
+	struct vring recvq;
+	struct vring xmitq;
+#endif
 
 #define VIRTQ_RECV 0
 #define VIRTQ_XMIT 1
@@ -261,7 +287,7 @@ static void check_blk(void)
 {
     volatile struct vring_used_elem *e;
     struct vring_desc *desc;
-    int dbg = 0;
+    int dbg = 1;
 
     for (;;) {
         uint16_t data_idx;
@@ -307,7 +333,7 @@ static void check_xmit(void)
 {
     volatile struct vring_used_elem *e;
     struct vring_desc *desc;
-    int dbg = 0;
+    int dbg = 1;
 
     for (;;) {
         uint16_t data_idx;
@@ -424,7 +450,7 @@ int virtio_net_xmit_packet(void *data, int len)
 {
     struct vring_desc *desc;
     struct vring_avail *avail;
-    int dbg = 0;
+    int dbg = 1;
 
     if (((xmit_next_avail + 2) % xmitq.size)
         == ((xmit_last_used * 2) % xmitq.size)) {
@@ -475,7 +501,7 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
     struct vring_desc *desc;
     struct vring_avail *avail;
     struct virtio_blk_req *req;
-    int dbg = 0;
+    int dbg = 1;
 
     if (((blk_next_avail + 3) % blkq.size)
         == ((blk_last_used * 3) % blkq.size)) {
@@ -624,25 +650,23 @@ void virtio_config_network(uint16_t base)
 {
     uint8_t ready_for_init = VIRTIO_PCI_STATUS_ACK | VIRTIO_PCI_STATUS_DRIVER;
     uint32_t host_features, guest_features;
-    uint16_t queue_size;
     int i;
-    int dbg = 0;
+    uint32_t hf;
+    uint64_t ptr;
 
     outb(base + VIRTIO_PCI_STATUS, ready_for_init);
 
     host_features = inl(base + VIRTIO_PCI_HOST_FEATURES);
 
-    if (dbg) {
-        uint32_t hf = host_features;
+        hf = host_features;
 
-        printf("host features: %x: ", hf);
-        for (i = 0; i < 32; i++) {
-            if (hf & 0x1)
-                printf("%d ", i);
-            hf = hf >> 1;
-        }
-        printf("\n");
-    }
+	printf("host network features: %x: ", hf);
+	for (i = 0; i < 32; i++) {
+	    if (hf & 0x1)
+		printf("%d ", i);
+	    hf = hf >> 1;
+	}
+	printf("\n");
 
     assert(host_features & VIRTIO_NET_F_MAC);
 
@@ -650,7 +674,7 @@ void virtio_config_network(uint16_t base)
     guest_features = VIRTIO_NET_F_MAC;
     outl(base + VIRTIO_PCI_GUEST_FEATURES, guest_features);
 
-    printf("Found virtio network device with MAC: ");
+    printf("Found virtio network device with the following MAC: ");
     for (i = 0; i < 6; i++) {
         virtio_net_mac[i] = inb(base + VIRTIO_PCI_CONFIG_OFF + i);
         printf("%02x ", virtio_net_mac[i]);
@@ -666,16 +690,40 @@ void virtio_config_network(uint16_t base)
              virtio_net_mac[4],
              virtio_net_mac[5]);
 
-    /* check that 2 256 entry virtqueues are here (recv and transmit) */
-    for (i = 0; i < 2; i++) {
-        outw(base + VIRTIO_PCI_QUEUE_SEL, i);
-        queue_size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-        printf("queue_size %d\n", queue_size);
-        //assert(queue_size == VRING_NET_MAX_QUEUE_SIZE);
+    /* get the size of the virt queues */
+    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
+    recvq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
+    xmitq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    printf("queue_sizes %d %d\n", recvq.size, xmitq.size);
 
-        recvq.size = queue_size;
-        xmitq.size = queue_size;
-    }
+    // just to keep the compiler happy
+    ptr = 0;
+
+    /* Alloc memory for the recv_data and xmit_data queues */
+#if 1
+
+    recvq.vring = recv_data;
+    xmitq.vring = xmit_data;
+
+    ptr = (uint64_t) malloc(VRING_SIZE(recvq.size) + 0x1000);
+    memset((void *) ptr, 0, VRING_SIZE(recvq.size));
+    recvq.vring = (void *) (ptr - (ptr % 0x1000));
+    ptr = (uint64_t) malloc(VRING_SIZE(recvq.size) + 0x1000);
+    memset((void *) ptr, 0, VRING_SIZE(xmitq.size));
+    xmitq.vring = (void *) (ptr - (ptr % 0x1000));
+    printf("recvq=%x xmitq=%x\n", recvq.vring, xmitq.vring);
+    //assert(recvq.vring && xmitq.vring);
+#else
+    recvq.vring = recv_data;
+    xmitq.vring = xmit_data;
+#endif
+
+    recv_bufs = malloc(VRING_NET_MAX_QUEUE_SIZE * sizeof(struct pkt_buffer));
+    memset(recv_bufs, 0, VRING_NET_MAX_QUEUE_SIZE * sizeof(struct pkt_buffer));
+    xmit_bufs = malloc(VRING_NET_MAX_QUEUE_SIZE * sizeof(struct pkt_buffer));
+    memset(xmit_bufs, 0, VRING_NET_MAX_QUEUE_SIZE * sizeof(struct pkt_buffer));
+    assert(recv_bufs && xmit_bufs);
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
 
