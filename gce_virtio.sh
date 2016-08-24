@@ -13,7 +13,7 @@ mkdir -p tmp
 #mirage configure -t virtio --dhcp=true --net=direct --network=tap0
 #make clean
 #make
-bash ./unikernel-mkimage.sh tmp/disk.raw tests/test_${APP}/test_${APP}.virtio
+bash ./unikernel-mkimage-debian.sh tmp/disk.raw tests/test_${APP}/test_${APP}.virtio
 cd tmp/
 tar -czvf ${NAME}.tar.gz disk.raw
 cd ..
