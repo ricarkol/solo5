@@ -242,6 +242,15 @@ struct pingpkt pings[256]; /* there can actually only be 128
                             * descriptors
                             */
 
+struct __attribute__((__packed__)) virtio_net_hdr {
+    uint8_t flags;
+    uint8_t gso_type;
+    uint16_t hdr_len;		/* Ethernet + IP + tcp/udp hdrs */
+    uint16_t gso_size;		/* Bytes to append to hdr_len per frame */
+    uint16_t csum_start;	/* Position to start checksumming from */
+    uint16_t csum_offset;	/* Offset after that to place checksum */
+};
+
 /* XXX Not a "public" API, fix this once we figure out what to do about a
  * runtime for standalone kernel tests.
  */
@@ -270,21 +279,38 @@ void solo5_ping_serve(void)
 
         p = (struct pingpkt *)pkt;
 
-        if (memcmp(p->ether.target, virtio_net_mac, HLEN_ETHER))
+        printf("got something\n");
+	for (i = 0; i < 64; i++) {
+	    printf("%02x ", ((uint8_t *)pkt)[i]);
+	    if ((i % 8) == 7)
+		printf(" ");
+	    if ((i % 16) == 15)
+		printf("\n");
+	}
+
+        if (memcmp(p->ether.target, virtio_net_mac, HLEN_ETHER)) {
+            printf("not ether addressed to us\n");
             goto out; /* not ether addressed to us */
+        }
 
         /* reorder ether net header addresses */
         memcpy(p->ether.target, p->ether.source, HLEN_ETHER);
         memcpy(p->ether.source, virtio_net_mac, HLEN_ETHER);
 
-        if (p->ether.type != htons(ETHERTYPE_IP))
+        if (p->ether.type != htons(ETHERTYPE_IP)) {
+            printf("not an IP packet\n");
             goto out; /* not an IP packet */
+        }
 
-        if (p->ip.version_ihl != 0x45)
+        if (p->ip.version_ihl != 0x45) {
+            printf("invalid ip_version\n");
             goto out;
+        }
 
-        if (p->ip.type != 0x00)
+        if (p->ip.type != 0x00) {
+            printf("invalid ip_type\n");
             goto out;
+        }
 
         if (p->ip.length != htons(0x54))
             goto out;
@@ -292,13 +318,17 @@ void solo5_ping_serve(void)
         p->ip.id = 0;
         p->ip.flags_offset = 0;
 
-        if (p->ip.proto != 0x01)
+        if (p->ip.proto != 0x01) {
+            printf("not ICMP\n");
             goto out; /* not ICMP */
+        }
 
         p->ip.checksum = 0;
 
-        if (memcmp(p->ip.dst_ip, virtio_net_ip, PLEN_IPV4))
+        if (memcmp(p->ip.dst_ip, virtio_net_ip, PLEN_IPV4)) {
+	    printf("not ip addressed to us\n");
             goto out; /* not ip addressed to us */
+        }
 
         /* reorder ip net header addresses */
         memcpy(p->ip.dst_ip, p->ip.src_ip, PLEN_IPV4);
@@ -307,13 +337,17 @@ void solo5_ping_serve(void)
         /* recalculate ip checksum for return pkt */
         p->ip.checksum = checksum(&p->ip, sizeof(struct ip));
 
-        if (p->ping.type != 0x08)
+        if (p->ping.type != 0x08) {
+	    printf("not an echo request\n");
             goto out; /* not an echo request */
+        }
 
         p->ping.type = 0x0; /* change into reply */
 
-        if (p->ping.code != 0x00)
+        if (p->ping.code != 0x00) {
+	    printf("invalid ping code\n");
             goto out;
+        }
 
         /* we can leave the rest of the ping packet but need to
          * recalculate checksum.  We're assuming 56 bytes of data.
