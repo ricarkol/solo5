@@ -304,7 +304,7 @@ static void check_xmit(void)
 {
     volatile struct vring_used_elem *e;
     struct vring_desc *desc;
-    int dbg = 1;
+    int dbg = 0;
 
     for (;;) {
         uint16_t data_idx;
@@ -325,30 +325,22 @@ static void check_xmit(void)
     }
 }
 
+
 static void recv_load_desc(void)
 {
     struct vring_desc *desc;
     struct vring_avail *avail;
 
-    /* it seems like we need one descriptor for the virtio header */
     desc = vring_desc_get(&recvq, recv_next_avail);
-    desc->addr = (uint64_t)&virtio_net_hdr;
-    desc->len = sizeof(virtio_net_hdr);
-    desc->next = recv_next_avail + 1; // need to wrap up this
-    desc->flags = VRING_DESC_F_NEXT | VRING_DESC_F_WRITE;
-
-    /* and a separate one for the actual packet */
-    desc = vring_desc_get(&recvq, recv_next_avail + 1);
-    desc->addr = (uint64_t)recv_bufs[recv_next_avail/2].data;
+    desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
     desc->len = PKT_BUFFER_LEN;
     desc->flags = VRING_DESC_F_WRITE;
-
     avail = vring_avail_get(&recvq);
     /* Memory barriers should be unnecessary with one processor */
     vring_avail_elem_get(&recvq, avail->idx % recvq.size)->val
         = recv_next_avail;
     avail->idx++;
-    recv_next_avail = (recv_next_avail + 2) % recvq.size;
+    recv_next_avail = (recv_next_avail + 1) % recvq.size;
 }
 
 /* WARNING: called in interrupt context */
@@ -359,24 +351,22 @@ static void check_recv(void)
     int i;
 
     for (;;) {
-        uint16_t data_idx;
-
         if ((vring_used_get(&recvq)->idx % recvq.size) == recv_last_used)
             break;
 
         e = vring_used_elem_get(&recvq, recv_last_used % recvq.size);
         desc = vring_desc_get(&recvq, e->id); /* the virtio_net header */
-        data_idx = desc->next;
-        desc = vring_desc_get(&recvq, data_idx); /* the data buffer */
 
-        if (0)
+        /* Everything should be in a single descriptor. */
+        assert(desc->next == 0);
+
+	if (0)
             printf("RECV: 0x%p next_avail %d last_used %d\n",
                    desc->addr, recv_next_avail, recv_last_used);
 
-        /* record actual packet len */
-        ((struct pkt_buffer *)desc->addr)->len = e->len
-            - sizeof(struct virtio_net_hdr);
+        ((struct pkt_buffer *)desc->addr)->len = e->len;
 
+        assert(e->len <= PKT_BUFFER_LEN);
         assert(e->len >= sizeof(struct virtio_net_hdr));
 
         if (0) {
@@ -411,8 +401,20 @@ void handle_virtio_interrupt(void)
 
 static void recv_setup(void)
 {
+    struct vring_desc *desc;
+    struct vring_avail *avail;
     do {
-        recv_load_desc();
+        desc = vring_desc_get(&recvq, recv_next_avail);
+        desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
+        desc->len = PKT_BUFFER_LEN;
+        desc->flags = VRING_DESC_F_WRITE;
+
+        avail = vring_avail_get(&recvq);
+        /* Memory barriers should be unnecessary with one processor */
+        vring_avail_elem_get(&recvq, avail->idx % recvq.size)->val
+            = recv_next_avail;
+        avail->idx++;
+        recv_next_avail = (recv_next_avail + 1) % recvq.size;
     } while (recv_next_avail != 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_RECV);
@@ -423,7 +425,7 @@ int virtio_net_xmit_packet(void *data, int len)
 {
     struct vring_desc *desc;
     struct vring_avail *avail;
-    int dbg = 1;
+    int dbg = 0;
 
     if (((xmit_next_avail + 2) % xmitq.size)
         == ((xmit_last_used * 2) % xmitq.size)) {
@@ -474,7 +476,7 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
     struct vring_desc *desc;
     struct vring_avail *avail;
     struct virtio_blk_req *req;
-    int dbg = 1;
+    int dbg = 0;
 
     if (((blk_next_avail + 3) % blkq.size)
         == ((blk_last_used * 3) % blkq.size)) {
@@ -624,7 +626,7 @@ void virtio_config_network(uint16_t base)
     uint8_t ready_for_init = VIRTIO_PCI_STATUS_ACK | VIRTIO_PCI_STATUS_DRIVER;
     uint32_t host_features, guest_features;
     int i;
-    int dbg = 1;
+    int dbg = 0;
 
     outb(base + VIRTIO_PCI_STATUS, ready_for_init);
 
@@ -669,7 +671,8 @@ void virtio_config_network(uint16_t base)
     recvq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
     xmitq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-    printf("queue_sizes %d %d\n", recvq.size, xmitq.size);
+    assert(recvq.size <= VRING_NET_MAX_QUEUE_SIZE);
+    assert(xmitq.size <= VRING_NET_MAX_QUEUE_SIZE);
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
 
@@ -782,7 +785,7 @@ void blk_test(void)
 
 int virtio_net_pkt_poll(void)
 {
-    if (recv_next_avail == ((recv_last_used * 2) % recvq.size))
+    if (recv_next_avail == ((recv_last_used) % recvq.size))
         return 0;
     else
         return 1;
@@ -792,14 +795,16 @@ uint8_t *virtio_net_pkt_get(int *size)
 {
     struct pkt_buffer *buf;
 
-    if (recv_next_avail == ((recv_last_used * 2) % recvq.size))
+    if (recv_next_avail == ((recv_last_used) % recvq.size))
         return NULL;
 
-    buf = &recv_bufs[recv_next_avail/2];
-    *size = buf->len;
+    buf = &recv_bufs[recv_next_avail];
 
-    return buf->data;
+    /* Remove the virtio_net_hdr */
+    *size = buf->len - sizeof(virtio_net_hdr);
+    return buf->data + sizeof(virtio_net_hdr);
 }
+
 void virtio_net_pkt_put(void)
 {
     recv_load_desc();
@@ -838,14 +843,12 @@ int solo5_net_read_sync(uint8_t *data, int *n)
     uint8_t *pkt;
     int len = *n;
 
-    printf("len=%d PKT=%d\n", len, PKT_BUFFER_LEN);
-    //assert(len <= PKT_BUFFER_LEN);
-
     pkt = virtio_net_pkt_get(&len);
     if (!pkt)
         return -1;
 
     assert(len <= *n);
+    assert(len <= PKT_BUFFER_LEN);
     memset(data, 0, *n);
     *n = len;
 
