@@ -17,6 +17,7 @@
  */
 
 #include "kernel.h"
+#include "virtio_ring.h"
 
 /* virtio config space layout */
 #define VIRTIO_PCI_HOST_FEATURES	0    /* 32-bit r/o */
@@ -107,23 +108,6 @@ struct virtio_blk_req {
 };
 static struct virtio_blk_req blk_bufs[128];
 
-struct __attribute__((__packed__)) vring_desc {
-    uint64_t addr;   /* Address (guest-physical). */
-    uint32_t len;    /* Length. */
-    uint16_t flags;  /* The flags as indicated above. */
-    uint16_t next;   /* Next field if flags & NEXT */
-};
-
-struct __attribute__((__packed__)) vring_avail_elem {
-    uint16_t val;
-};
-
-struct __attribute__((__packed__)) vring_avail {
-    uint16_t flags;
-    uint16_t idx;
-    struct vring_avail_elem ring[0];
-};
-
 /* u32 is used here for ids for padding reasons. */
 struct __attribute__((__packed__)) vring_used_elem {
     uint32_t id;  /* Index of start of used descriptor chain. */
@@ -142,11 +126,11 @@ struct __attribute__((__packed__)) vring_used {
  */
 
 #define VRING_OFF_DESC(q)  0
-#define VRING_OFF_AVAIL(q) ((q) * sizeof(struct vring_desc))
+#define VRING_OFF_AVAIL(q) ((q) * sizeof(struct virtq_desc))
 #define VRING_OFF_AVAIL_RING(q) (VRING_OFF_AVAIL(q)             \
-                                 + sizeof(struct vring_avail))
+                                 + sizeof(struct virtq_avail))
 #define VRING_OFF_PADDING(q) (VRING_OFF_AVAIL_RING(q)       \
-                              + (sizeof(struct vring_avail_elem) * (q)))
+                              + (sizeof(le16) * (q)))
 #define VRING_OFF_USED(q) ((VRING_OFF_PADDING(q) + PAGE_SIZE - 1) & PAGE_MASK)
 #define VRING_OFF_USED_RING(q) (VRING_OFF_USED(q) + sizeof(struct vring_used))
 
@@ -158,22 +142,22 @@ struct vring {
     void *vring;
 };
 
-struct vring_desc *vring_desc_get(struct vring *vring, int i)
+struct virtq_desc *virtq_desc_get(struct vring *vring, int i)
 {
-    return (struct vring_desc *)(vring->vring
+    return (struct virtq_desc *)(vring->vring
                                  + VRING_OFF_DESC(vring->size)
-                                 + (i * sizeof(struct vring_desc)));
+                                 + (i * sizeof(struct virtq_desc)));
 }
-struct vring_avail *vring_avail_get(struct vring *vring)
+struct virtq_avail *virtq_avail_get(struct vring *vring)
 {
-    return (struct vring_avail *)(vring->vring
+    return (struct virtq_avail *)(vring->vring
                                   + VRING_OFF_AVAIL(vring->size));
 }
-struct vring_avail_elem *vring_avail_elem_get(struct vring *vring, int i)
+le16 *virtq_avail_elem_get(struct vring *vring, int i)
 {
-    return (struct vring_avail_elem *)(vring->vring
+    return (vring->vring
                                        + VRING_OFF_AVAIL_RING(vring->size)
-                                       + (i * sizeof(struct vring_avail_elem)));
+                                       + (i * sizeof(le16)));
 }
 struct vring_used *vring_used_get(struct vring *vring)
 {
@@ -259,7 +243,7 @@ static uint32_t blk_last_used;
 static void check_blk(void)
 {
     volatile struct vring_used_elem *e;
-    struct vring_desc *desc;
+    struct virtq_desc *desc;
     int dbg = 0;
 
     for (;;) {
@@ -270,7 +254,7 @@ static void check_blk(void)
             break;
 
         e = vring_used_elem_get(&blkq, blk_last_used % blkq.size);
-        desc = vring_desc_get(&blkq, e->id); /* the virtio_blk header */
+        desc = virtq_desc_get(&blkq, e->id); /* the virtio_blk header */
         req = (struct virtio_blk_req *)desc->addr;
 
         if (dbg)
@@ -280,14 +264,14 @@ static void check_blk(void)
         req->hw_used = 1;
 
         data_idx = desc->next;
-        desc = vring_desc_get(&blkq, data_idx); /* the data buffer */
+        desc = virtq_desc_get(&blkq, data_idx); /* the data buffer */
 
         if (dbg)
             printf("INTR: BLK: desc=0x%p data=%08x...\n",
                    desc->addr, *(uint32_t *)desc->addr);
 
         data_idx = desc->next;
-        desc = vring_desc_get(&blkq, data_idx); /* the status */
+        desc = virtq_desc_get(&blkq, data_idx); /* the status */
 
         if (dbg)
             printf("INTR: BLK: desc=0x%p status=%d\n",
@@ -305,7 +289,7 @@ static void check_blk(void)
 static void check_xmit(void)
 {
     volatile struct vring_used_elem *e;
-    struct vring_desc *desc;
+    struct virtq_desc *desc;
     int dbg = 0;
 
     for (;;) {
@@ -313,7 +297,7 @@ static void check_xmit(void)
             break;
 
         e = vring_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
-        desc = vring_desc_get(&xmitq, e->id); /* the virtio_net header */
+        desc = virtq_desc_get(&xmitq, e->id); /* the virtio_net header */
 
         if (dbg)
             printf("REAP: 0x%p next_avail %d last_used %d\n",
@@ -326,17 +310,16 @@ static void check_xmit(void)
 
 static void recv_load_desc(void)
 {
-    struct vring_desc *desc;
-    struct vring_avail *avail;
+    struct virtq_desc *desc;
+    struct virtq_avail *avail;
 
-    desc = vring_desc_get(&recvq, recv_next_avail);
+    desc = virtq_desc_get(&recvq, recv_next_avail);
     desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
     desc->len = PKT_BUFFER_LEN;
     desc->flags = VRING_DESC_F_WRITE;
-    avail = vring_avail_get(&recvq);
+    avail = virtq_avail_get(&recvq);
     /* Memory barriers should be unnecessary with one processor */
-    vring_avail_elem_get(&recvq, avail->idx % recvq.size)->val
-        = recv_next_avail;
+    *(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
     avail->idx++;
     recv_next_avail = (recv_next_avail + 1) % recvq.size;
 }
@@ -345,7 +328,7 @@ static void recv_load_desc(void)
 static void check_recv(void)
 {
     volatile struct vring_used_elem *e;
-    struct vring_desc *desc;
+    struct virtq_desc *desc;
     int i;
 
     for (;;) {
@@ -353,7 +336,7 @@ static void check_recv(void)
             break;
 
         e = vring_used_elem_get(&recvq, recv_last_used % recvq.size);
-        desc = vring_desc_get(&recvq, e->id); /* the virtio_net header */
+        desc = virtq_desc_get(&recvq, e->id); /* the virtio_net header */
 
         /* Everything should be in a single descriptor. */
         assert(desc->next == 0);
@@ -399,18 +382,17 @@ void handle_virtio_interrupt(void)
 
 static void recv_setup(void)
 {
-    struct vring_desc *desc;
-    struct vring_avail *avail;
+    struct virtq_desc *desc;
+    struct virtq_avail *avail;
     do {
-        desc = vring_desc_get(&recvq, recv_next_avail);
+        desc = virtq_desc_get(&recvq, recv_next_avail);
         desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
         desc->len = PKT_BUFFER_LEN;
         desc->flags = VRING_DESC_F_WRITE;
 
-        avail = vring_avail_get(&recvq);
+        avail = virtq_avail_get(&recvq);
         /* Memory barriers should be unnecessary with one processor */
-        vring_avail_elem_get(&recvq, avail->idx % recvq.size)->val
-            = recv_next_avail;
+        *(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
         avail->idx++;
         recv_next_avail = (recv_next_avail + 1) % recvq.size;
     } while (recv_next_avail != 0);
@@ -421,8 +403,8 @@ static void recv_setup(void)
 /* performance note: we perform a copy into the xmit buffer */
 int virtio_net_xmit_packet(void *data, int len)
 {
-    struct vring_desc *desc;
-    struct vring_avail *avail;
+    struct virtq_desc *desc;
+    struct virtq_avail *avail;
     int dbg = 0;
 
     if (((xmit_next_avail + 1) % xmitq.size) ==
@@ -439,7 +421,7 @@ int virtio_net_xmit_packet(void *data, int len)
     memcpy(xmit_bufs[xmit_next_avail].data + sizeof(virtio_net_hdr),
            data, len);
 
-    desc = vring_desc_get(&xmitq, xmit_next_avail);
+    desc = virtq_desc_get(&xmitq, xmit_next_avail);
     desc->addr = (uint64_t) xmit_bufs[xmit_next_avail].data;
     desc->len = sizeof(virtio_net_hdr) + len;
     desc->flags = 0;
@@ -448,10 +430,9 @@ int virtio_net_xmit_packet(void *data, int len)
         atomic_printf("XMIT: 0x%p next_avail %d last_used %d\n",
                       desc->addr, xmit_next_avail, xmit_last_used);
 
-    avail = vring_avail_get(&xmitq);
+    avail = virtq_avail_get(&xmitq);
     /* Memory barriers should be unnecessary with one processor */
-    vring_avail_elem_get(&xmitq, avail->idx % xmitq.size)->val
-        = xmit_next_avail;
+    *(virtq_avail_elem_get(&xmitq, avail->idx % xmitq.size)) = xmit_next_avail;
 
     avail->idx++;
     xmit_next_avail = (xmit_next_avail + 1) % xmitq.size;
@@ -465,8 +446,8 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
                                             uint64_t sector,
                                             void *data, int len)
 {
-    struct vring_desc *desc;
-    struct vring_avail *avail;
+    struct virtq_desc *desc;
+    struct virtq_avail *avail;
     struct virtio_blk_req *req;
     int dbg = 0;
 
@@ -501,7 +482,7 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
 
 
     /* the header */
-    desc = vring_desc_get(&blkq, blk_next_avail);
+    desc = virtq_desc_get(&blkq, blk_next_avail);
     desc->addr = (uint64_t)&req->hdr;
     desc->len = sizeof(struct virtio_blk_hdr);
     desc->next = (blk_next_avail + 1) % blkq.size;
@@ -511,7 +492,7 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
         atomic_printf("REQ BLK: hdr at 0x%x\n", desc->addr);
 
     /* the data */
-    desc = vring_desc_get(&blkq, (blk_next_avail + 1) % blkq.size);
+    desc = virtq_desc_get(&blkq, (blk_next_avail + 1) % blkq.size);
     desc->addr = (uint64_t)req->data;
     desc->len = len;
     desc->next = (blk_next_avail + 2) % blkq.size;
@@ -524,7 +505,7 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
                       desc->addr, *(uint32_t *)desc->addr);
 
     /* the status */
-    desc = vring_desc_get(&blkq, (blk_next_avail + 2) % blkq.size);
+    desc = virtq_desc_get(&blkq, (blk_next_avail + 2) % blkq.size);
     desc->addr = (uint64_t)&req->status;
     desc->len = sizeof(uint8_t);
     desc->next = 0;
@@ -537,10 +518,9 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
         atomic_printf("BLK: 0x%p next_avail %d last_used %d\n",
                       desc->addr, blk_next_avail, blk_last_used);
 
-    avail = vring_avail_get(&blkq);
+    avail = virtq_avail_get(&blkq);
     /* Memory barriers should be unnecessary with one processor */
-    vring_avail_elem_get(&blkq, avail->idx % blkq.size)->val
-        = blk_next_avail;
+    *(virtq_avail_elem_get(&blkq, avail->idx % blkq.size)) = blk_next_avail;
 
     avail->idx++;
     blk_next_avail = (blk_next_avail + 3) % blkq.size;
