@@ -125,6 +125,7 @@ static struct virtio_blk_req blk_bufs[128];
 #define VRING_SIZE(q) (VRING_OFF_USED_RING(q) \
                                    + (sizeof(struct virtq_used_elem) * (q)))
 
+/*
 struct vring {
     uint32_t size;
     void *vring;
@@ -158,6 +159,7 @@ struct virtq_used_elem *virtq_used_elem_get(struct vring *vring, int i)
                                       + VRING_OFF_USED_RING(vring->size)
                                       + (i * sizeof(struct virtq_used_elem)));
 }
+*/
 
 /*
  * There is no official max queue size. But we've seen 4096, so let's use the
@@ -170,29 +172,17 @@ static struct pkt_buffer recv_bufs[VRING_NET_MAX_QUEUE_SIZE];
 
 static uint8_t recv_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
 static uint8_t xmit_data[VRING_SIZE(VRING_NET_MAX_QUEUE_SIZE)] ALIGN_4K;
-static struct vring recvq = {
-    .vring = (void *)recv_data,
-};
-static struct vring xmitq = {
-    .vring = (void *)xmit_data,
-};
 
 static struct virtq recv_virtq;
 static struct virtq xmit_virtq;
+static struct virtq blk_virtq;
 
 #define VIRTQ_RECV 0
 #define VIRTQ_XMIT 1
 #define VIRTQ_BLK  0
 
-
 #define VRING_BLK_QUEUE_SIZE 128
 static uint8_t blk_data[VRING_SIZE(VRING_BLK_QUEUE_SIZE)] ALIGN_4K;
-static struct vring blkq = {
-    .size = VRING_BLK_QUEUE_SIZE,
-    .vring = (void *)blk_data,
-};
-
-
 
 /* This header comes first in the scatter-gather list.
  * If VIRTIO_F_ANY_LAYOUT is not negotiated, it must
@@ -241,11 +231,14 @@ static void check_blk(void)
         uint16_t data_idx;
         struct virtio_blk_req *req;
 
-        if ((virtq_used_get(&blkq)->idx % blkq.size) == blk_last_used)
+        //if ((virtq_used_get(&blkq)->idx % blkq.size) == blk_last_used)
+        if ((blk_virtq.used->idx % blk_virtq.num) == blk_last_used)
             break;
 
-        e = virtq_used_elem_get(&blkq, blk_last_used % blkq.size);
-        desc = virtq_desc_get(&blkq, e->id); /* the virtio_blk header */
+        //e = virtq_used_elem_get(&blkq, blk_last_used % blkq.size);
+        //desc = virtq_desc_get(&blkq, e->id); /* the virtio_blk header */
+        e = &(blk_virtq.used->ring[blk_last_used % blk_virtq.num]);
+        desc = &(blk_virtq.desc[e->id]);
         req = (struct virtio_blk_req *)desc->addr;
 
         if (dbg)
@@ -255,14 +248,16 @@ static void check_blk(void)
         req->hw_used = 1;
 
         data_idx = desc->next;
-        desc = virtq_desc_get(&blkq, data_idx); /* the data buffer */
+        //desc = virtq_desc_get(&blkq, data_idx); /* the data buffer */
+        desc = &(blk_virtq.desc[data_idx]);
 
         if (dbg)
             printf("INTR: BLK: desc=0x%p data=%08x...\n",
                    desc->addr, *(uint32_t *)desc->addr);
 
         data_idx = desc->next;
-        desc = virtq_desc_get(&blkq, data_idx); /* the status */
+        //desc = virtq_desc_get(&blkq, data_idx); /* the status */
+        desc = &(blk_virtq.desc[data_idx]);
 
         if (dbg)
             printf("INTR: BLK: desc=0x%p status=%d\n",
@@ -272,7 +267,7 @@ static void check_blk(void)
             printf("REAP: 0x%p next_avail %d last_used %d\n",
                    desc->addr, blk_next_avail, blk_last_used);
 
-        blk_last_used = (blk_last_used + 1) % blkq.size;
+        blk_last_used = (blk_last_used + 1) % blk_virtq.num;
     }
 }
 
@@ -284,17 +279,18 @@ static void check_xmit(void)
     int dbg = 0;
 
     for (;;) {
-        if ((virtq_used_get(&xmitq)->idx % xmitq.size) == xmit_last_used)
+        //if ((virtq_used_get(&xmitq)->idx % xmitq.size) == xmit_last_used)
+        if ((xmit_virtq.used->idx % xmit_virtq.num) == xmit_last_used)
             break;
 
-        e = xmit_virtq.used->ring[xmit_last_used % xmitq.size];
+        e = xmit_virtq.used->ring[xmit_last_used % xmit_virtq.num];
         desc = xmit_virtq.desc[e.id];
 
         if (dbg)
             printf("REAP: 0x%p next_avail %d last_used %d\n",
                    desc.addr, xmit_next_avail, xmit_last_used);
 
-        xmit_last_used = (xmit_last_used + 1) % xmitq.size;
+        xmit_last_used = (xmit_last_used + 1) % xmit_virtq.num;
     }
 }
 
@@ -304,15 +300,18 @@ static void recv_load_desc(void)
     struct virtq_desc *desc;
     struct virtq_avail *avail;
 
-    desc = virtq_desc_get(&recvq, recv_next_avail);
+    desc = &(recv_virtq.desc[recv_next_avail]);
+    //desc = virtq_desc_get(&recvq, recv_next_avail);
     desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
-    //desc->len = PKT_BUFFER_LEN;
-    //desc->flags = VRING_DESC_F_WRITE;
-    avail = virtq_avail_get(&recvq);
+    desc->len = PKT_BUFFER_LEN;
+    desc->flags = VRING_DESC_F_WRITE;
+    //avail = virtq_avail_get(&recvq);
+    avail = recv_virtq.avail;
     /* Memory barriers should be unnecessary with one processor */
-    *(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
+    //*(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
+    recv_virtq.avail->ring[avail->idx % recv_virtq.num] = recv_next_avail;
     avail->idx++;
-    recv_next_avail = (recv_next_avail + 1) % recvq.size;
+    recv_next_avail = (recv_next_avail + 1) % recv_virtq.num;
 }
 
 /* WARNING: called in interrupt context */
@@ -323,11 +322,14 @@ static void check_recv(void)
     int i;
 
     for (;;) {
-        if ((virtq_used_get(&recvq)->idx % recvq.size) == recv_last_used)
+        //if ((virtq_used_get(&recvq)->idx % recvq.size) == recv_last_used)
+        if ((recv_virtq.used->idx % recv_virtq.num) == recv_last_used)
             break;
 
-        e = virtq_used_elem_get(&recvq, recv_last_used % recvq.size);
-        desc = virtq_desc_get(&recvq, e->id); /* the virtio_net header */
+        //e = virtq_used_elem_get(&recvq, recv_last_used % recvq.size);
+        //desc = virtq_desc_get(&recvq, e->id); /* the virtio_net header */
+        e = &(recv_virtq.used->ring[recv_last_used % recv_virtq.num]);
+        desc = &(recv_virtq.desc[e->id]);
 
         /* Everything should be in a single descriptor. */
         assert(desc->next == 0);
@@ -352,7 +354,7 @@ static void check_recv(void)
             }
         }
 
-        recv_last_used = (recv_last_used + 1) % recvq.size;
+        recv_last_used = (recv_last_used + 1) % recv_virtq.num;
     }
 }
 
@@ -376,16 +378,19 @@ static void recv_setup(void)
     struct virtq_desc *desc;
     struct virtq_avail *avail;
     do {
-        desc = virtq_desc_get(&recvq, recv_next_avail);
+        //desc = virtq_desc_get(&recvq, recv_next_avail);
+        desc = &(recv_virtq.desc[recv_next_avail]);
         desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
         desc->len = PKT_BUFFER_LEN;
         desc->flags = VRING_DESC_F_WRITE;
 
-        avail = virtq_avail_get(&recvq);
+        //avail = virtq_avail_get(&recvq);
+        avail = recv_virtq.avail;
         /* Memory barriers should be unnecessary with one processor */
-        *(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
+        //*(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
+        recv_virtq.avail->ring[avail->idx % recv_virtq.num] = recv_next_avail;
         avail->idx++;
-        recv_next_avail = (recv_next_avail + 1) % recvq.size;
+        recv_next_avail = (recv_next_avail + 1) % recv_virtq.num;
     } while (recv_next_avail != 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_RECV);
@@ -398,8 +403,8 @@ int virtio_net_xmit_packet(void *data, int len)
     struct virtq_avail *avail;
     int dbg = 0;
 
-    if (((xmit_next_avail + 1) % xmitq.size) ==
-        (xmit_last_used % xmitq.size)) {
+    if (((xmit_next_avail + 1) % xmit_virtq.num) ==
+        (xmit_last_used % xmit_virtq.num)) {
         printf("xmit buffer full! next_avail:%d last_used:%d\n",
                xmit_next_avail, xmit_last_used);
             return -1;
@@ -412,7 +417,8 @@ int virtio_net_xmit_packet(void *data, int len)
     memcpy(xmit_bufs[xmit_next_avail].data + sizeof(virtio_net_hdr),
            data, len);
 
-    desc = virtq_desc_get(&xmitq, xmit_next_avail);
+    //desc = virtq_desc_get(&xmitq, xmit_next_avail);
+    desc = &(xmit_virtq.desc[xmit_next_avail]);
     desc->addr = (uint64_t) xmit_bufs[xmit_next_avail].data;
     desc->len = sizeof(virtio_net_hdr) + len;
     desc->flags = 0;
@@ -421,12 +427,14 @@ int virtio_net_xmit_packet(void *data, int len)
         atomic_printf("XMIT: 0x%p next_avail %d last_used %d\n",
                       desc->addr, xmit_next_avail, xmit_last_used);
 
-    avail = virtq_avail_get(&xmitq);
+    //avail = virtq_avail_get(&xmitq);
+    avail = xmit_virtq.avail;
     /* Memory barriers should be unnecessary with one processor */
-    *(virtq_avail_elem_get(&xmitq, avail->idx % xmitq.size)) = xmit_next_avail;
+    //*(virtq_avail_elem_get(&xmitq, avail->idx % xmitq.size)) = xmit_next_avail;
+    xmit_virtq.avail->ring[avail->idx % xmit_virtq.num] = xmit_next_avail;
 
     avail->idx++;
-    xmit_next_avail = (xmit_next_avail + 1) % xmitq.size;
+    xmit_next_avail = (xmit_next_avail + 1) % xmit_virtq.num;
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
     return 0;
@@ -442,8 +450,8 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
     struct virtio_blk_req *req;
     int dbg = 0;
 
-    if (((blk_next_avail + 3) % blkq.size)
-        == ((blk_last_used * 3) % blkq.size)) {
+    if (((blk_next_avail + 3) % blk_virtq.num)
+        == ((blk_last_used * 3) % blk_virtq.num)) {
         printf("blk buffer full! next_avail:%d last_used:%d\n",
                blk_next_avail, blk_last_used);
         return NULL;
@@ -473,20 +481,22 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
 
 
     /* the header */
-    desc = virtq_desc_get(&blkq, blk_next_avail);
+    //desc = virtq_desc_get(&blkq, blk_next_avail);
+    desc = &(blk_virtq.desc[blk_next_avail]);
     desc->addr = (uint64_t)&req->hdr;
     desc->len = sizeof(struct virtio_blk_hdr);
-    desc->next = (blk_next_avail + 1) % blkq.size;
+    desc->next = (blk_next_avail + 1) % blk_virtq.num;
     desc->flags = VRING_DESC_F_NEXT;
 
     if (dbg)
         atomic_printf("REQ BLK: hdr at 0x%x\n", desc->addr);
 
     /* the data */
-    desc = virtq_desc_get(&blkq, (blk_next_avail + 1) % blkq.size);
+    //desc = virtq_desc_get(&blkq, (blk_next_avail + 1) % blkq.size);
+    desc = &(blk_virtq.desc[(blk_next_avail + 1) % blk_virtq.num]);
     desc->addr = (uint64_t)req->data;
     desc->len = len;
-    desc->next = (blk_next_avail + 2) % blkq.size;
+    desc->next = (blk_next_avail + 2) % blk_virtq.num;
     desc->flags = VRING_DESC_F_NEXT;
     if (type == VIRTIO_BLK_T_IN)
         desc->flags |= VRING_DESC_F_WRITE;
@@ -496,7 +506,8 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
                       desc->addr, *(uint32_t *)desc->addr);
 
     /* the status */
-    desc = virtq_desc_get(&blkq, (blk_next_avail + 2) % blkq.size);
+    //desc = virtq_desc_get(&blkq, (blk_next_avail + 2) % blkq.size);
+    desc = &(blk_virtq.desc[(blk_next_avail + 2) % blk_virtq.num]);
     desc->addr = (uint64_t)&req->status;
     desc->len = sizeof(uint8_t);
     desc->next = 0;
@@ -509,12 +520,14 @@ static struct virtio_blk_req *virtio_blk_op(uint32_t type,
         atomic_printf("BLK: 0x%p next_avail %d last_used %d\n",
                       desc->addr, blk_next_avail, blk_last_used);
 
-    avail = virtq_avail_get(&blkq);
+    //avail = virtq_avail_get(&blkq);
+    avail = blk_virtq.avail;
     /* Memory barriers should be unnecessary with one processor */
-    *(virtq_avail_elem_get(&blkq, avail->idx % blkq.size)) = blk_next_avail;
+    //*(virtq_avail_elem_get(&blkq, avail->idx % blkq.size)) = blk_next_avail;
+    blk_virtq.avail->ring[avail->idx % blk_virtq.num] = blk_next_avail;
 
     avail->idx++;
-    blk_next_avail = (blk_next_avail + 3) % blkq.size;
+    blk_next_avail = (blk_next_avail + 3) % blk_virtq.num;
     outw(virtio_blk_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_BLK);
 
     return req;
@@ -540,7 +553,6 @@ void virtio_config_block(uint16_t base)
 {
     uint8_t ready_for_init = VIRTIO_PCI_STATUS_ACK | VIRTIO_PCI_STATUS_DRIVER;
     uint32_t host_features, guest_features;
-    uint32_t queue_size;
     int i;
     int dbg = 1;
 
@@ -571,15 +583,21 @@ void virtio_config_block(uint16_t base)
 
     outw(base + VIRTIO_PCI_QUEUE_SEL, 0);
 
-    queue_size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-    printf("queue size is %d\n", queue_size);
-    assert(queue_size == VRING_BLK_QUEUE_SIZE);
+    //queue_size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    blk_virtq.num = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    
+    printf("queue size is %d\n", blk_virtq.num);
+    assert(blk_virtq.num == VRING_BLK_QUEUE_SIZE);
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
 
     outb(base + VIRTIO_PCI_QUEUE_SEL, 0);
-    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t)blkq.vring
+    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t)blk_data
          >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
+
+    blk_virtq.desc =  (struct virtq_desc *)(blk_data + VRING_OFF_DESC(blk_virtq.num));
+    blk_virtq.avail = (struct virtq_avail *)(blk_data + VRING_OFF_AVAIL(blk_virtq.num));
+    blk_virtq.used = (struct virtq_used *)(blk_data + VRING_OFF_USED(blk_virtq.num));
 
     virtio_blk_pci_base = base;
 }
@@ -631,27 +649,31 @@ void virtio_config_network(uint16_t base)
 
     /* get the size of the virt queues */
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
-    recvq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    //recvq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    recv_virtq.num = inw(base + VIRTIO_PCI_QUEUE_SIZE);
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
-    xmitq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-    assert(recvq.size <= VRING_NET_MAX_QUEUE_SIZE);
-    assert(xmitq.size <= VRING_NET_MAX_QUEUE_SIZE);
+    //xmitq.size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    xmit_virtq.num = inw(base + VIRTIO_PCI_QUEUE_SIZE);
+    //assert(recv_virtq.num <= VRING_NET_MAX_QUEUE_SIZE);
+    //assert(xmitq.size <= VRING_NET_MAX_QUEUE_SIZE);
+    assert(recv_virtq.num <= VRING_NET_MAX_QUEUE_SIZE);
+    assert(xmit_virtq.num <= VRING_NET_MAX_QUEUE_SIZE);
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
 
-    recv_virtq.desc =  (struct virtq_desc *)(recvq.vring + VRING_OFF_DESC(recvq.size));
-    recv_virtq.avail = (struct virtq_avail *)(recvq.vring + VRING_OFF_AVAIL(recvq.size));
-    recv_virtq.used = (struct virtq_used *)(recvq.vring + VRING_OFF_USED(recvq.size));
+    recv_virtq.desc =  (struct virtq_desc *)(recv_data + VRING_OFF_DESC(recv_virtq.num));
+    recv_virtq.avail = (struct virtq_avail *)(recv_data + VRING_OFF_AVAIL(recv_virtq.num));
+    recv_virtq.used = (struct virtq_used *)(recv_data + VRING_OFF_USED(recv_virtq.num));
 
-    xmit_virtq.desc =  (struct virtq_desc *)(xmitq.vring + VRING_OFF_DESC(xmitq.size));
-    xmit_virtq.avail = (struct virtq_avail *)(xmitq.vring + VRING_OFF_AVAIL(xmitq.size));
-    xmit_virtq.used = (struct virtq_used *)(xmitq.vring + VRING_OFF_USED(xmitq.size));
+    xmit_virtq.desc =  (struct virtq_desc *)(xmit_data + VRING_OFF_DESC(xmit_virtq.num));
+    xmit_virtq.avail = (struct virtq_avail *)(xmit_data + VRING_OFF_AVAIL(xmit_virtq.num));
+    xmit_virtq.used = (struct virtq_used *)(xmit_data + VRING_OFF_USED(xmit_virtq.num));
 
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
-    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t)recvq.vring
+    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t) recv_data
          >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
-    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t)xmitq.vring
+    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t) xmit_data
          >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
 
     virtio_net_pci_base = base;
@@ -756,7 +778,7 @@ void blk_test(void)
 
 int virtio_net_pkt_poll(void)
 {
-    if (recv_next_avail == (recv_last_used % recvq.size))
+    if (recv_next_avail == (recv_last_used % recv_virtq.num))
         return 0;
     else
         return 1;
@@ -766,7 +788,7 @@ uint8_t *virtio_net_pkt_get(int *size)
 {
     struct pkt_buffer *buf;
 
-    if (recv_next_avail == (recv_last_used % recvq.size))
+    if (recv_next_avail == (recv_last_used % recv_virtq.num))
         return NULL;
 
     buf = &recv_bufs[recv_next_avail];
