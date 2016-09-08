@@ -280,7 +280,7 @@ static void check_blk(void)
 static void check_xmit(void)
 {
     volatile struct virtq_used_elem *e;
-    struct virtq_desc *desc;
+    struct virtq_desc desc;
     int dbg = 0;
 
     for (;;) {
@@ -289,11 +289,11 @@ static void check_xmit(void)
 
         e = virtq_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
         //desc = virtq_desc_get(&xmitq, e->id); /* the virtio_net header */
-        desc = &(xmit_virtq.desc[e->id]);
+        desc = xmit_virtq.desc[e->id];
 
         if (dbg)
             printf("REAP: 0x%p next_avail %d last_used %d\n",
-                   desc->addr, xmit_next_avail, xmit_last_used);
+                   desc.addr, xmit_next_avail, xmit_last_used);
 
         xmit_last_used = (xmit_last_used + 1) % xmitq.size;
     }
