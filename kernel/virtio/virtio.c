@@ -305,9 +305,9 @@ static void recv_load_desc(void)
     struct virtq_avail *avail;
 
     desc = virtq_desc_get(&recvq, recv_next_avail);
-    //desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
-    desc->len = PKT_BUFFER_LEN;
-    desc->flags = VRING_DESC_F_WRITE;
+    desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
+    //desc->len = PKT_BUFFER_LEN;
+    //desc->flags = VRING_DESC_F_WRITE;
     avail = virtq_avail_get(&recvq);
     /* Memory barriers should be unnecessary with one processor */
     *(virtq_avail_elem_get(&recvq, avail->idx % recvq.size)) = recv_next_avail;
