@@ -287,7 +287,8 @@ static void check_xmit(void)
         if ((virtq_used_get(&xmitq)->idx % xmitq.size) == xmit_last_used)
             break;
 
-        e = virtq_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
+        //e = virtq_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
+        e = xmit_virtq.used[xmit_last_used % xmitq.size];
         //desc = virtq_desc_get(&xmitq, e->id); /* the virtio_net header */
         desc = xmit_virtq.desc[e->id];
 
