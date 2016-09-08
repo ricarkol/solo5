@@ -108,18 +108,6 @@ struct virtio_blk_req {
 };
 static struct virtio_blk_req blk_bufs[128];
 
-/* u32 is used here for ids for padding reasons. */
-struct __attribute__((__packed__)) vring_used_elem {
-    uint32_t id;  /* Index of start of used descriptor chain. */
-    uint32_t len; /* Total len of the desc chain which was used (written to) */
-};
-
-struct __attribute__((__packed__)) vring_used {
-    uint16_t flags;
-    uint16_t idx;
-    struct vring_used_elem ring[0];
-};
-
 /* The vring is one of these irritating layouts that we can't just
  *  struct out because of variable length fields.  Instead, we use
  *  these offsets and _get functions.
@@ -132,10 +120,10 @@ struct __attribute__((__packed__)) vring_used {
 #define VRING_OFF_PADDING(q) (VRING_OFF_AVAIL_RING(q)       \
                               + (sizeof(le16) * (q)))
 #define VRING_OFF_USED(q) ((VRING_OFF_PADDING(q) + PAGE_SIZE - 1) & PAGE_MASK)
-#define VRING_OFF_USED_RING(q) (VRING_OFF_USED(q) + sizeof(struct vring_used))
+#define VRING_OFF_USED_RING(q) (VRING_OFF_USED(q) + sizeof(struct virtq_used))
 
 #define VRING_SIZE(q) (VRING_OFF_USED_RING(q) \
-                                   + (sizeof(struct vring_used_elem) * (q)))
+                                   + (sizeof(struct virtq_used_elem) * (q)))
 
 struct vring {
     uint32_t size;
@@ -159,16 +147,16 @@ le16 *virtq_avail_elem_get(struct vring *vring, int i)
                                        + VRING_OFF_AVAIL_RING(vring->size)
                                        + (i * sizeof(le16)));
 }
-struct vring_used *vring_used_get(struct vring *vring)
+struct virtq_used *virtq_used_get(struct vring *vring)
 {
-    return (struct vring_used *)(vring->vring
+    return (struct virtq_used *)(vring->vring
                                  + VRING_OFF_USED(vring->size));
 }
-struct vring_used_elem *vring_used_elem_get(struct vring *vring, int i)
+struct virtq_used_elem *virtq_used_elem_get(struct vring *vring, int i)
 {
-    return (struct vring_used_elem *)(vring->vring
+    return (struct virtq_used_elem *)(vring->vring
                                       + VRING_OFF_USED_RING(vring->size)
-                                      + (i * sizeof(struct vring_used_elem)));
+                                      + (i * sizeof(struct virtq_used_elem)));
 }
 
 /*
@@ -242,7 +230,7 @@ static uint32_t blk_last_used;
 /* WARNING: called in interrupt context */
 static void check_blk(void)
 {
-    volatile struct vring_used_elem *e;
+    volatile struct virtq_used_elem *e;
     struct virtq_desc *desc;
     int dbg = 0;
 
@@ -250,10 +238,10 @@ static void check_blk(void)
         uint16_t data_idx;
         struct virtio_blk_req *req;
 
-        if ((vring_used_get(&blkq)->idx % blkq.size) == blk_last_used)
+        if ((virtq_used_get(&blkq)->idx % blkq.size) == blk_last_used)
             break;
 
-        e = vring_used_elem_get(&blkq, blk_last_used % blkq.size);
+        e = virtq_used_elem_get(&blkq, blk_last_used % blkq.size);
         desc = virtq_desc_get(&blkq, e->id); /* the virtio_blk header */
         req = (struct virtio_blk_req *)desc->addr;
 
@@ -288,15 +276,15 @@ static void check_blk(void)
 /* WARNING: called in interrupt context */
 static void check_xmit(void)
 {
-    volatile struct vring_used_elem *e;
+    volatile struct virtq_used_elem *e;
     struct virtq_desc *desc;
     int dbg = 0;
 
     for (;;) {
-        if ((vring_used_get(&xmitq)->idx % xmitq.size) == xmit_last_used)
+        if ((virtq_used_get(&xmitq)->idx % xmitq.size) == xmit_last_used)
             break;
 
-        e = vring_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
+        e = virtq_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
         desc = virtq_desc_get(&xmitq, e->id); /* the virtio_net header */
 
         if (dbg)
@@ -327,15 +315,15 @@ static void recv_load_desc(void)
 /* WARNING: called in interrupt context */
 static void check_recv(void)
 {
-    volatile struct vring_used_elem *e;
+    volatile struct virtq_used_elem *e;
     struct virtq_desc *desc;
     int i;
 
     for (;;) {
-        if ((vring_used_get(&recvq)->idx % recvq.size) == recv_last_used)
+        if ((virtq_used_get(&recvq)->idx % recvq.size) == recv_last_used)
             break;
 
-        e = vring_used_elem_get(&recvq, recv_last_used % recvq.size);
+        e = virtq_used_elem_get(&recvq, recv_last_used % recvq.size);
         desc = virtq_desc_get(&recvq, e->id); /* the virtio_net header */
 
         /* Everything should be in a single descriptor. */
