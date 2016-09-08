@@ -288,7 +288,8 @@ static void check_xmit(void)
             break;
 
         e = virtq_used_elem_get(&xmitq, xmit_last_used % xmitq.size);
-        desc = virtq_desc_get(&xmitq, e->id); /* the virtio_net header */
+        //desc = virtq_desc_get(&xmitq, e->id); /* the virtio_net header */
+        desc = &(xmit_virtq.desc[e->id]);
 
         if (dbg)
             printf("REAP: 0x%p next_avail %d last_used %d\n",
