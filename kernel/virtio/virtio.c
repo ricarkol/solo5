@@ -523,7 +523,6 @@ void virtio_config_block(uint16_t base)
 
     outw(base + VIRTIO_PCI_QUEUE_SEL, 0);
 
-    //queue_size = inw(base + VIRTIO_PCI_QUEUE_SIZE);
     blk_virtq.num = inw(base + VIRTIO_PCI_QUEUE_SIZE);
     
     printf("queue size is %d\n", blk_virtq.num);
