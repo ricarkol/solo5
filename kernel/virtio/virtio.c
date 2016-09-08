@@ -177,6 +177,9 @@ static struct vring xmitq = {
     .vring = (void *)xmit_data,
 };
 
+static struct virtq recv_virtq;
+static struct virtq xmit_virtq;
+
 #define VIRTQ_RECV 0
 #define VIRTQ_XMIT 1
 #define VIRTQ_BLK  0
@@ -635,6 +638,14 @@ void virtio_config_network(uint16_t base)
     assert(xmitq.size <= VRING_NET_MAX_QUEUE_SIZE);
 
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
+
+    recv_virtq.desc =  (struct virtq_desc *)(recvq.vring + VRING_OFF_DESC(recvq.size));
+    recv_virtq.avail = (struct virtq_avail *)(recvq.vring + VRING_OFF_AVAIL(recvq.size));
+    recv_virtq.used = (struct virtq_used *)(recvq.vring + VRING_OFF_USED(recvq.size));
+
+    xmit_virtq.desc =  (struct virtq_desc *)(xmitq.vring + VRING_OFF_DESC(xmitq.size));
+    xmit_virtq.avail = (struct virtq_avail *)(xmitq.vring + VRING_OFF_AVAIL(xmitq.size));
+    xmit_virtq.used = (struct virtq_used *)(xmitq.vring + VRING_OFF_USED(xmitq.size));
 
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
     outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t)recvq.vring
