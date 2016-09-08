@@ -305,7 +305,7 @@ static void recv_load_desc(void)
     struct virtq_avail *avail;
 
     desc = virtq_desc_get(&recvq, recv_next_avail);
-    desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
+    //desc->addr = (uint64_t)recv_bufs[recv_next_avail].data;
     desc->len = PKT_BUFFER_LEN;
     desc->flags = VRING_DESC_F_WRITE;
     avail = virtq_avail_get(&recvq);
