@@ -89,7 +89,7 @@ static void check_xmit(void)
 {
     volatile struct virtq_used_elem e;
     struct virtq_desc desc;
-    int dbg = 0;
+    int dbg = 1;
 
     for (;;) {
         if ((xmitq.used->idx % xmitq.num) == xmit_last_used)
@@ -139,7 +139,7 @@ static void check_recv(void)
         /* Everything should be in a single descriptor. */
         assert(desc->next == 0);
 
-	if (0)
+	if (1)
             printf("RECV: 0x%p next_avail %d last_used %d\n",
                    desc->addr, recv_next_avail, recv_last_used);
 
@@ -148,7 +148,7 @@ static void check_recv(void)
         assert(e->len <= PKT_BUFFER_LEN);
         assert(e->len >= sizeof(struct virtio_net_hdr));
 
-        if (0) {
+        if (1) {
             printf("recv pkt:\n");
             for (i = 0; i < 64; i++) {
                 printf("%02x ", ((uint8_t *)desc->addr)[i]);
@@ -204,7 +204,7 @@ int virtio_net_xmit_packet(void *data, int len)
 {
     struct virtq_desc *desc;
     struct virtq_avail *avail;
-    int dbg = 0;
+    int dbg = 1;
 
     if (((xmit_next_avail + 1) % xmitq.num) ==
         (xmit_last_used % xmitq.num)) {
@@ -246,7 +246,7 @@ void virtio_config_network(uint16_t base, unsigned irq)
     uint8_t ready_for_init = VIRTIO_PCI_STATUS_ACK | VIRTIO_PCI_STATUS_DRIVER;
     uint32_t host_features, guest_features;
     int i;
-    int dbg = 0;
+    int dbg = 1;
 
     outb(base + VIRTIO_PCI_STATUS, ready_for_init);
 
@@ -266,8 +266,10 @@ void virtio_config_network(uint16_t base, unsigned irq)
 
     assert(host_features & VIRTIO_NET_F_MAC);
 
+#define VIRTIO_NET_F_MRG_RXBUF (1<<15)
+
     /* only negotiate that the mac was set for now */
-    guest_features = VIRTIO_NET_F_MAC;
+    guest_features = VIRTIO_NET_F_MAC | VIRTIO_NET_F_MRG_RXBUF;
     outl(base + VIRTIO_PCI_GUEST_FEATURES, guest_features);
 
     printf("Found virtio network device with MAC: ");

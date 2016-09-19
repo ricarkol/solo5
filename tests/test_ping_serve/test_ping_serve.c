@@ -2,6 +2,9 @@
 
 /* Liberally copied / reinvented libc bits */
 
+
+int solo5_printf(const char *fmt, ...);
+
 static void *memcpy(void *dst, const void *src, size_t size)
 {
     size_t i;
@@ -146,6 +149,7 @@ static void ping_serve(int quiet)
     for (;;) {
         struct pingpkt *p = (struct pingpkt *)&buf;
         int len = sizeof(buf);
+        int i;
 
         /* wait for packet */
         /* XXX doing the below produces an assert in ukvm, look into it */
@@ -158,6 +162,17 @@ static void ping_serve(int quiet)
             ;
         }
         assert(solo5_net_read_sync(buf, &len) == 0);
+
+        if (1) {
+            solo5_printf("ping received:\n");
+            for (i = 0; i < 64; i++) {
+                solo5_printf("%02x ", ((uint8_t *)buf));
+                if ((i % 8) == 7)
+                    solo5_printf(" ");
+                if ((i % 16) == 15)
+                    solo5_printf("\n");
+            }
+        }
 
         if (memcmp(p->ether.target, macaddr, HLEN_ETHER) &&
             memcmp(p->ether.target, macaddr_brd, HLEN_ETHER))
