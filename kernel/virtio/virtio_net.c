@@ -222,18 +222,24 @@ int virtio_net_xmit_packet(void *data, int len)
             return -1;
     }
 
+#define VRING_DESC_F_NEXT 1
+
     /* we perform a copy into the xmit buffer to make reclaiming easy */
     assert((len + sizeof(virtio_net_hdr)) <= PKT_BUFFER_LEN);
     memcpy(xmit_bufs[xmit_next_avail].data,
            &virtio_net_hdr, sizeof(virtio_net_hdr));
-    memcpy(xmit_bufs[xmit_next_avail].data + sizeof(virtio_net_hdr),
-           data, len);
-
     desc = &(xmitq.desc[xmit_next_avail]);
     desc->addr = (uint64_t) xmit_bufs[xmit_next_avail].data;
-    desc->len = sizeof(virtio_net_hdr) + len;
+    desc->len = sizeof(virtio_net_hdr);
+    desc->flags = VRING_DESC_F_NEXT;
+    desc->next = xmit_next_avail + 1;
+
+    memcpy(xmit_bufs[xmit_next_avail + 1].data,
+           data, len);
+    desc = &(xmitq.desc[xmit_next_avail + 1]);
+    desc->addr = (uint64_t) xmit_bufs[xmit_next_avail + 1].data;
+    desc->len = len;
     desc->flags = 0;
-    desc->next = 0;
 
     if (dbg)
         atomic_printf("XMIT: 0x%p next_avail %d last_used %d\n",
@@ -245,8 +251,9 @@ int virtio_net_xmit_packet(void *data, int len)
     cc_barrier();
 
     avail->idx++;
+    avail->idx++;
     cc_barrier();
-    xmit_next_avail = (xmit_next_avail + 1) % xmitq.num;
+    xmit_next_avail = (xmit_next_avail + 2) % xmitq.num;
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
     return 0;
