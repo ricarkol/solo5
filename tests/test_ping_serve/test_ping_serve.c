@@ -14,9 +14,9 @@ static void *memcpy(void *dst, const void *src, size_t size)
     return dst;
 }
 
-static int memcmp(const void *s1, const void *s2, size_t n)
+static int memcmp(const void *s1, const void *s2, int n)
 {
-    size_t i;
+    int i;
 
     for (i = 0; i < n; i++) {
         if (((uint8_t *)s1)[i] < ((uint8_t *)s2)[i])
@@ -166,7 +166,7 @@ static void ping_serve(int quiet)
         if (1) {
             solo5_printf("ping received:\n");
             for (i = 0; i < 64; i++) {
-                solo5_printf("%02x ", ((uint8_t *)buf));
+                solo5_printf("%02x ", ((uint8_t *)buf)[i]);
                 if ((i % 8) == 7)
                     solo5_printf(" ");
                 if ((i % 16) == 15)
@@ -174,15 +174,23 @@ static void ping_serve(int quiet)
             }
         }
 
-        if (memcmp(p->ether.target, macaddr, HLEN_ETHER) &&
-            memcmp(p->ether.target, macaddr_brd, HLEN_ETHER))
-            goto out; /* not ether addressed to us */
+        if (memcmp(p->ether.target, macaddr, HLEN_ETHER)) {
+            solo5_printf("maraddr fail\n");
+            //goto out; /* not ether addressed to us */
+        }
+
+        if (memcmp(p->ether.target, macaddr_brd, HLEN_ETHER)) {
+            solo5_printf("maraddr_brd fail\n");
+            //goto out; /* not ether addressed to us */
+        }
 
         if (p->ether.type != htons(ETHERTYPE_IP))
             goto out; /* not an IP packet */
 
         if (p->ip.version_ihl != 0x45)
             goto out; /* we don't support IPv6, yet :-) */
+
+        solo5_printf("2\n");
 
         if (p->ip.type != 0x00)
             goto out;
@@ -194,6 +202,7 @@ static void ping_serve(int quiet)
             memcmp(p->ip.dst_ip, ipaddr_brdnet, PLEN_IPV4) &&
             memcmp(p->ip.dst_ip, ipaddr_brdall, PLEN_IPV4))
             goto out; /* not ip addressed to us */
+        solo5_printf("3\n");
 
         if (p->ping.type != 0x08)
             goto out; /* not an echo request */
@@ -201,6 +210,7 @@ static void ping_serve(int quiet)
         if (p->ping.code != 0x00)
             goto out;
 
+        solo5_printf("4\n");
         /* reorder ether net header addresses */
         memcpy(p->ether.target, p->ether.source, HLEN_ETHER);
         memcpy(p->ether.source, macaddr, HLEN_ETHER);
@@ -226,6 +236,7 @@ static void ping_serve(int quiet)
         if (!quiet)
             puts("Received ping, sending reply\n");
 
+        solo5_printf("len=%d\n", len);
         if (solo5_net_write_sync(buf, len) == -1)
             puts("Write error\n");
 

@@ -31,6 +31,8 @@ struct pkt_buffer {
     uint32_t len;
 };
 
+#define cc_barrier() __asm__ __volatile__("" : : : "memory")
+
 /*
  * There is no official max queue size. But we've seen 4096, so let's use the
  * double of that.
@@ -68,16 +70,17 @@ struct __attribute__((__packed__)) virtio_net_hdr {
     uint16_t gso_size;		/* Bytes to append to hdr_len per frame */
     uint16_t csum_start;	/* Position to start checksumming from */
     uint16_t csum_offset;	/* Offset after that to place checksum */
+    uint16_t num_buffers;	/* Offset after that to place checksum */
 };
 
-static struct virtio_net_hdr virtio_net_hdr = {0, 0, 0, 0, 0, 0};
+static struct virtio_net_hdr virtio_net_hdr = {0, 0, 0, 0, 0, 0, 0};
 static uint16_t virtio_net_pci_base; /* base in PCI config space */
 
 static uint8_t virtio_net_mac[6];
 static char virtio_net_mac_str[18];
 
 static int net_configured;
-static uint32_t xmit_next_avail;
+static uint32_t xmit_next_avail = 0;
 static uint32_t recv_next_avail;
 static uint32_t xmit_last_used;
 static uint32_t recv_last_used;
@@ -90,6 +93,8 @@ static void check_xmit(void)
     volatile struct virtq_used_elem e;
     struct virtq_desc desc;
     int dbg = 1;
+
+    return;
 
     for (;;) {
         if ((xmitq.used->idx % xmitq.num) == xmit_last_used)
@@ -118,7 +123,9 @@ static void recv_load_desc(void)
     avail = recvq.avail;
     /* Memory barriers should be unnecessary with one processor */
     recvq.avail->ring[avail->idx % recvq.num] = recv_next_avail;
+    cc_barrier();
     avail->idx++;
+    cc_barrier();
     recv_next_avail = (recv_next_avail + 1) % recvq.num;
 }
 
@@ -192,7 +199,9 @@ static void recv_setup(void)
         avail = recvq.avail;
         /* Memory barriers should be unnecessary with one processor */
         recvq.avail->ring[avail->idx % recvq.num] = recv_next_avail;
+    cc_barrier();
         avail->idx++;
+    cc_barrier();
         recv_next_avail = (recv_next_avail + 1) % recvq.num;
     } while (recv_next_avail != 0);
 
@@ -224,6 +233,7 @@ int virtio_net_xmit_packet(void *data, int len)
     desc->addr = (uint64_t) xmit_bufs[xmit_next_avail].data;
     desc->len = sizeof(virtio_net_hdr) + len;
     desc->flags = 0;
+    desc->next = 0;
 
     if (dbg)
         atomic_printf("XMIT: 0x%p next_avail %d last_used %d\n",
@@ -232,8 +242,10 @@ int virtio_net_xmit_packet(void *data, int len)
     avail = xmitq.avail;
     /* Memory barriers should be unnecessary with one processor */
     xmitq.avail->ring[avail->idx % xmitq.num] = xmit_next_avail;
+    cc_barrier();
 
     avail->idx++;
+    cc_barrier();
     xmit_next_avail = (xmit_next_avail + 1) % xmitq.num;
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
@@ -270,7 +282,22 @@ void virtio_config_network(uint16_t base, unsigned irq)
 
     /* only negotiate that the mac was set for now */
     guest_features = VIRTIO_NET_F_MAC | VIRTIO_NET_F_MRG_RXBUF;
+    //guest_features = VIRTIO_NET_F_MAC;
     outl(base + VIRTIO_PCI_GUEST_FEATURES, guest_features);
+
+    host_features = inl(base + VIRTIO_PCI_HOST_FEATURES);
+
+    if (dbg) {
+        uint32_t hf = host_features;
+
+        printf("host features: %x: ", hf);
+        for (i = 0; i < 32; i++) {
+            if (hf & 0x1)
+                printf("%d ", i);
+            hf = hf >> 1;
+        }
+        printf("\n");
+    }
 
     printf("Found virtio network device with MAC: ");
     for (i = 0; i < 6; i++) {
@@ -346,6 +373,7 @@ int virtio_net_pkt_poll(void)
 uint8_t *virtio_net_pkt_get(int *size)
 {
     struct pkt_buffer *buf;
+    uint8_t *data;
 
     if (recv_next_avail == (recv_last_used % recvq.num))
         return NULL;
@@ -354,6 +382,8 @@ uint8_t *virtio_net_pkt_get(int *size)
 
     /* Remove the virtio_net_hdr */
     *size = buf->len - sizeof(virtio_net_hdr);
+    data = buf->data + sizeof(virtio_net_hdr);
+
     return buf->data + sizeof(virtio_net_hdr);
 }
 
