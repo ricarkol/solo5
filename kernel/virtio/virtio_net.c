@@ -203,38 +203,40 @@ static void recv_setup(void)
 int virtio_net_xmit_packet(void *data, int len)
 {
     struct virtq_desc *desc;
-    struct virtq_avail *avail;
     int dbg = 0;
 
-    if (((xmit_next_avail + 1) % xmitq.num) ==
-        (xmit_last_used % xmitq.num)) {
+    if (((xmit_next_avail + 2) % xmitq.num) ==
+        ((xmit_last_used * 2) % xmitq.num)) {
         printf("xmit buffer full! next_avail:%d last_used:%d\n",
                xmit_next_avail, xmit_last_used);
             return -1;
     }
 
-    /* we perform a copy into the xmit buffer to make reclaiming easy */
-    assert((len + sizeof(virtio_net_hdr)) <= PKT_BUFFER_LEN);
     memcpy(xmit_bufs[xmit_next_avail].data,
            &virtio_net_hdr, sizeof(virtio_net_hdr));
-    memcpy(xmit_bufs[xmit_next_avail].data + sizeof(virtio_net_hdr),
-           data, len);
-
     desc = &(xmitq.desc[xmit_next_avail]);
-    desc->addr = (uint64_t) xmit_bufs[xmit_next_avail].data;
-    desc->len = sizeof(virtio_net_hdr) + len;
+    desc->addr = (uint64_t)&virtio_net_hdr;
+    desc->len = sizeof(virtio_net_hdr);
+    desc->next = xmit_next_avail + 1;
+    desc->flags = VIRTQ_DESC_F_NEXT;
+
+    assert(len <= PKT_BUFFER_LEN);
+    memcpy(xmit_bufs[xmit_next_avail + 1].data, data, len);
+    desc = &(xmitq.desc[xmit_next_avail + 1]);
+    desc->addr = (uint64_t) xmit_bufs[xmit_next_avail + 1].data;
+    desc->len = len;
     desc->flags = 0;
+    desc->next = 0;
 
     if (dbg)
         atomic_printf("XMIT: 0x%p next_avail %d last_used %d\n",
                       desc->addr, xmit_next_avail, xmit_last_used);
 
-    avail = xmitq.avail;
     /* Memory barriers should be unnecessary with one processor */
-    xmitq.avail->ring[avail->idx % xmitq.num] = xmit_next_avail;
+    xmitq.avail->ring[xmitq.avail->idx % xmitq.num] = xmit_next_avail;
 
-    avail->idx++;
-    xmit_next_avail = (xmit_next_avail + 1) % xmitq.num;
+    xmitq.avail->idx++;
+    xmit_next_avail = (xmit_next_avail + 2) % xmitq.num;
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
     return 0;
