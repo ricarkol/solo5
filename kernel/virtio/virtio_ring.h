@@ -114,6 +114,13 @@ struct virtq {
         struct virtq_desc *desc;
         struct virtq_avail *avail;
         struct virtq_used *used;
+
+        /* Keep track of available (free) descriptors */
+        uint32_t num_avail;
+
+        /* Indexes in the descriptors array */
+        uint32_t last_used;
+        uint32_t next_avail;
 };
 
 static inline int virtq_need_event(uint16_t event_idx, uint16_t new_idx, uint16_t old_idx)
@@ -133,4 +140,5 @@ static inline le16 *virtq_avail_event(struct virtq *vq)
         /* For backwards compat, avail event index is at *end* of used ring. */
         return (le16 *)&vq->used->ring[vq->num];
 }
+
 #endif /* VIRTQUEUE_H */
