@@ -20,35 +20,16 @@
 #include "virtio_ring.h"
 #include "virtio_pci.h"
 
+#define VIRTQ_RECV 0
+#define VIRTQ_XMIT 1
+
 /* The feature bitmap for virtio net */
 #define VIRTIO_NET_F_CSUM	0     /* Host handles pkts w/ partial csum */
 #define VIRTIO_NET_F_GUEST_CSUM	1 /* Guest handles pkts w/ partial csum */
 #define VIRTIO_NET_F_MAC (1 << 5) /* Host has given MAC address. */
 
-#define PKT_BUFFER_LEN 1526
-
-struct pkt_buffer {
-    uint8_t data[PKT_BUFFER_LEN];
-    uint32_t len;
-};
-
-/*
- * There is no official max queue size. But we've seen 4096, so let's use the
- * double of that.
- */
-#define VIRTQ_NET_MAX_QUEUE_SIZE 8192
-
-static struct pkt_buffer *xmit_bufs;
-static struct pkt_buffer *recv_bufs;
-
-static uint8_t *recv_data;
-static uint8_t *xmit_data;
-
 static struct virtq recvq;
 static struct virtq xmitq;
-
-#define VIRTQ_RECV 0
-#define VIRTQ_XMIT 1
 
 /* This header comes first in the scatter-gather list.
  * If VIRTIO_F_ANY_LAYOUT is not negotiated, it must
@@ -81,83 +62,6 @@ static int net_configured;
 static int handle_virtio_net_interrupt(void *);
 
 /* WARNING: called in interrupt context */
-static void virtq_handle_interrupt(struct virtq *vq)
-{
-    volatile struct virtq_used_elem *e;
-
-    for (;;) {
-        uint16_t desc_idx;
-
-        if ((vq->used->idx % vq->num) == vq->last_used)
-            break;
-
-        e = &(vq->used->ring[vq->last_used % vq->num]);
-        desc_idx = e->id;
-
-	/* This will be non-zero for the receive case, and will be a no-op in
-         * the transmit case. */
-        ((struct pkt_buffer *)vq->desc[desc_idx].addr)->len = e->len;
-        assert(e->len <= PKT_BUFFER_LEN);
-
-        vq->num_avail++;
-        while (vq->desc[desc_idx].flags & VIRTQ_DESC_F_NEXT) {
-            vq->num_avail++;
-            desc_idx = vq->desc[desc_idx].next;
-        }
-
-        vq->last_used = (vq->last_used + 1) % vq->num;
-    }
-}
-
-/* head is an index into head and bufs (simultaneously). */
-static int virtq_init_descriptor_chain(struct virtq *vq,
-                                       uint16_t head,
-                                       struct pkt_buffer *bufs,
-                                       uint16_t num,
-                                       uint16_t extra_flags)
-{
-    struct virtq_desc *desc;
-    uint16_t i;
-    int dbg = 0;
-    uint32_t used_descs = num;
-
-    if (vq->num_avail < used_descs) {
-        printf("buffer full! next_avail:%d last_used:%d\n",
-               vq->next_avail, vq->last_used);
-            return -1;
-    }
-
-    i = head;
-
-    do {
-	desc = &(vq->desc[i]);
-	desc->addr = (uint64_t) bufs[i].data;
-	desc->len = bufs[i].len;
-	i = (i + 1) % vq->num;
-        desc->next = i;
-	desc->flags = VIRTQ_DESC_F_NEXT | extra_flags;
-    } while (--used_descs);
-
-    /* The last descriptor in the chain needs a next = 0 */
-    desc->next = 0;
-    desc->flags = extra_flags;
-
-    if (dbg)
-        atomic_printf("0x%p next_avail %d last_used %d\n",
-                      desc->addr, vq->next_avail,
-                      (vq->last_used * num) % vq->num);
-
-    vq->num_avail -= num;
-    /* Memory barriers should be unnecessary with one processor */
-    vq->avail->ring[vq->avail->idx % vq->num] = head;
-    /* avail->idx always increments and wraps naturally at 65536 */
-    vq->avail->idx++;
-    vq->next_avail = (vq->next_avail + num) % vq->num;
-
-    return 0;
-}
-
-/* WARNING: called in interrupt context */
 int handle_virtio_net_interrupt(void *arg __attribute__((unused)))
 {
     uint8_t isr_status;
@@ -176,10 +80,10 @@ int handle_virtio_net_interrupt(void *arg __attribute__((unused)))
 static void recv_setup(void)
 {
     do {
-	memset(recv_bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
-	recv_bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
+	memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
+	recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
 
-	virtq_init_descriptor_chain(&recvq, recvq.next_avail, recv_bufs, 1,
+	virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1,
 				    VIRTQ_DESC_F_WRITE);
     } while (recvq.next_avail != 0);
 
@@ -192,14 +96,14 @@ int virtio_net_xmit_packet(void *data, int len)
     uint16_t head;
 
     head = xmitq.next_avail;
-    memset(xmit_bufs[head].data, 0, sizeof(struct virtio_net_hdr));
-    xmit_bufs[head].len = sizeof(struct virtio_net_hdr);
+    memset(xmitq.bufs[head].data, 0, sizeof(struct virtio_net_hdr));
+    xmitq.bufs[head].len = sizeof(struct virtio_net_hdr);
 
     assert(len <= PKT_BUFFER_LEN);
-    memcpy(xmit_bufs[head + 1].data, data, len);
-    xmit_bufs[head + 1].len = len;
+    memcpy(xmitq.bufs[head + 1].data, data, len);
+    xmitq.bufs[head + 1].len = len;
 
-    virtq_init_descriptor_chain(&xmitq, head, xmit_bufs, 2, 0);
+    virtq_init_descriptor_chain(&xmitq, head, 2, 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
@@ -209,12 +113,24 @@ int virtio_net_xmit_packet(void *data, int len)
 
 void virtio_config_network(uint16_t base, unsigned irq)
 {
-    uint8_t ready_for_init = VIRTIO_PCI_STATUS_ACK | VIRTIO_PCI_STATUS_DRIVER;
     uint32_t host_features, guest_features;
     int i;
     int dbg = 0;
 
-    outb(base + VIRTIO_PCI_STATUS, ready_for_init);
+    /*
+     * 2. Set the ACKNOWLEDGE status bit: the guest OS has notice the device.
+     * 3. Set the DRIVER status bit: the guest OS knows how to drive the device. 
+     */
+
+    outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_ACK);
+    outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER);
+
+    /*
+     * 4. Read device feature bits, and write the subset of feature bits
+     * understood by the OS and driver to the device. During this step the
+     * driver MAY read (but MUST NOT write) the device-specific configuration
+     * fields to check that it can support the device before accepting it. 
+     */
 
     host_features = inl(base + VIRTIO_PCI_HOST_FEATURES);
 
@@ -252,50 +168,30 @@ void virtio_config_network(uint16_t base, unsigned irq)
              virtio_net_mac[4],
              virtio_net_mac[5]);
 
-    /* get the size of the virt queues */
-    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
-    recvq.last_used = recvq.next_avail = 0;
-    recvq.num = recvq.num_avail = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
-    xmitq.last_used = xmitq.next_avail = 0;
-    xmitq.num = xmitq.num_avail = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-    assert(recvq.num <= VIRTQ_NET_MAX_QUEUE_SIZE);
-    assert(xmitq.num <= VIRTQ_NET_MAX_QUEUE_SIZE);
-    printf("net queue size is %d/%d\n", recvq.num, xmitq.num);
+    /*
+     * 7. Perform device-specific setup, including discovery of virtqueues for
+     * the device, optional per-bus setup, reading and possibly writing the
+     * device's virtio configuration space, and population of virtqueues.
+     */
 
-    recv_data = memalign(4096, VIRTQ_SIZE(recvq.num));
-    assert(recv_data);
-    memset(recv_data, 0, VIRTQ_SIZE(recvq.num));
-    recv_bufs = calloc(recvq.num, sizeof (struct pkt_buffer));
-    assert(recv_bufs);
+    virtq_init_rings(base, &recvq, VIRTQ_RECV);
+    virtq_init_rings(base, &xmitq, VIRTQ_XMIT);
 
-    recvq.desc = (struct virtq_desc *)(recv_data + VIRTQ_OFF_DESC(recvq.num));
-    recvq.avail = (struct virtq_avail *)(recv_data + VIRTQ_OFF_AVAIL(recvq.num));
-    recvq.used = (struct virtq_used *)(recv_data + VIRTQ_OFF_USED(recvq.num));
-
-    xmit_data = memalign(4096, VIRTQ_SIZE(xmitq.num));
-    assert(xmit_data);
-    memset(xmit_data, 0, VIRTQ_SIZE(xmitq.num));
-    xmit_bufs = calloc(xmitq.num, sizeof (struct pkt_buffer));
-    assert(xmit_bufs);
-
-    xmitq.desc = (struct virtq_desc *)(xmit_data + VIRTQ_OFF_DESC(xmitq.num));
-    xmitq.avail = (struct virtq_avail *)(xmit_data + VIRTQ_OFF_AVAIL(xmitq.num));
-    xmitq.used = (struct virtq_used *)(xmit_data + VIRTQ_OFF_USED(xmitq.num));
+    recvq.bufs = calloc(recvq.num, sizeof (struct io_buffer));
+    assert(recvq.bufs);
+    xmitq.bufs = calloc(xmitq.num, sizeof (struct io_buffer));
+    assert(xmitq.bufs);
 
     virtio_net_pci_base = base;
     net_configured = 1;
     intr_register_irq(irq, handle_virtio_net_interrupt, NULL);
-    outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
-
-    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
-    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t) recv_data
-         >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
-    outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
-    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t) xmit_data
-         >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
-
     recv_setup();
+
+    /*
+     * 8. Set the DRIVER_OK status bit. At this point the device is "live".
+     */
+
+    outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
 }
 
 int virtio_net_pkt_poll(void)
@@ -311,12 +207,12 @@ int virtio_net_pkt_poll(void)
 
 uint8_t *virtio_net_pkt_get(int *size)
 {
-    struct pkt_buffer *buf;
+    struct io_buffer *buf;
 
     if (recvq.next_avail == (recvq.last_used % recvq.num))
         return NULL;
 
-    buf = &recv_bufs[recvq.next_avail];
+    buf = &recvq.bufs[recvq.next_avail];
 
     /* Remove the virtio_net_hdr */
     *size = buf->len - sizeof(struct virtio_net_hdr);
@@ -325,10 +221,10 @@ uint8_t *virtio_net_pkt_get(int *size)
 
 static void recv_load_desc(void)
 {
-    memset(recv_bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
-    recv_bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
+    memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
+    recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
 
-    virtq_init_descriptor_chain(&recvq, recvq.next_avail, recv_bufs, 1,
+    virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1,
                                 VIRTQ_DESC_F_WRITE);
 }
 

@@ -108,12 +108,35 @@ struct virtq_used {
         /* Only if VIRTIO_F_EVENT_IDX: le16 avail_event; */
 };
 
+#define PKT_BUFFER_LEN 1526
+
+/*
+ * Our drivers map each descriptor to an io_buffer. An array of io_buffer's
+ * of size virtq.num (same as virtq.desc) is allocated during initialiation
+ * by each device driver.
+ */
+struct io_buffer {
+    uint8_t data[PKT_BUFFER_LEN];
+
+    /* Data length in Bytes. It is written by the driver on a tx or write, or
+     * written by the device (via an interrupt) on an rx or read. */
+    uint32_t len;
+
+    /* Status of the IO, written by the device (via an interrupt). */
+    uint8_t status;
+
+    /* The device set this field to 0 before submitting an IO, and it is set
+     * to 1 on completion (via an interrupt). */
+    uint8_t hw_used;
+};
+
 struct virtq {
         unsigned int num;
 
         struct virtq_desc *desc;
         struct virtq_avail *avail;
         struct virtq_used *used;
+        struct io_buffer *bufs;
 
         /* Keep track of available (free) descriptors */
         uint32_t num_avail;
@@ -140,5 +163,12 @@ static inline le16 *virtq_avail_event(struct virtq *vq)
         /* For backwards compat, avail event index is at *end* of used ring. */
         return (le16 *)&vq->used->ring[vq->num];
 }
+
+void virtq_handle_interrupt(struct virtq *vq);
+int virtq_init_descriptor_chain(struct virtq *vq,
+                                uint16_t head,
+                                uint16_t num,
+                                uint16_t extra_flags);
+void virtq_init_rings(uint16_t pci_base, struct virtq *vq, int selector);
 
 #endif /* VIRTQUEUE_H */
