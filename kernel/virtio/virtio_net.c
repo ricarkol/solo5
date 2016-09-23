@@ -32,14 +32,6 @@ struct pkt_buffer {
     uint32_t len;
 };
 
-struct pkt_buffers_queue {
-    uint32_t num;
-    struct pkt_buffer *bufs;
-    uint32_t idx;
-};
-
-#define VIRTQ_MAX_DESCRIPTORS_PER_TX_CHAIN 2
-
 /*
  * There is no official max queue size. But we've seen 4096, so let's use the
  * double of that.
@@ -117,6 +109,54 @@ static void virtq_handle_interrupt(struct virtq *vq)
     }
 }
 
+/* head is an index into head and bufs (simultaneously). */
+static int virtq_init_descriptor_chain(struct virtq *vq,
+                                       uint16_t head,
+                                       struct pkt_buffer *bufs,
+                                       uint16_t num,
+                                       uint16_t extra_flags)
+{
+    struct virtq_desc *desc;
+    uint16_t i;
+    int dbg = 0;
+    uint32_t used_descs = num;
+
+    if (vq->num_avail < used_descs) {
+        printf("buffer full! next_avail:%d last_used:%d\n",
+               vq->next_avail, vq->last_used);
+            return -1;
+    }
+
+    i = head;
+
+    do {
+	desc = &(vq->desc[i]);
+	desc->addr = (uint64_t) bufs[i].data;
+	desc->len = bufs[i].len;
+	i = (i + 1) % vq->num;
+        desc->next = i;
+	desc->flags = VIRTQ_DESC_F_NEXT | extra_flags;
+    } while (--used_descs);
+
+    /* The last descriptor in the chain needs a next = 0 */
+    desc->next = 0;
+    desc->flags = extra_flags;
+
+    if (dbg)
+        atomic_printf("0x%p next_avail %d last_used %d\n",
+                      desc->addr, vq->next_avail,
+                      (vq->last_used * num) % vq->num);
+
+    vq->num_avail -= num;
+    /* Memory barriers should be unnecessary with one processor */
+    vq->avail->ring[vq->avail->idx % vq->num] = head;
+    /* avail->idx always increments and wraps naturally at 65536 */
+    vq->avail->idx++;
+    vq->next_avail = (vq->next_avail + num) % vq->num;
+
+    return 0;
+}
+
 /* WARNING: called in interrupt context */
 int handle_virtio_net_interrupt(void *arg __attribute__((unused)))
 {
@@ -135,18 +175,12 @@ int handle_virtio_net_interrupt(void *arg __attribute__((unused)))
 
 static void recv_setup(void)
 {
-    struct virtq_desc *desc;
     do {
-        desc = &(recvq.desc[recvq.next_avail]);
-        desc->addr = (uint64_t) recv_bufs[recvq.next_avail].data;
-        desc->len = PKT_BUFFER_LEN;
-        desc->flags = VIRTQ_DESC_F_WRITE;
+	memset(recv_bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
+	recv_bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
 
-        /* Memory barriers should be unnecessary with one processor */
-        recvq.avail->ring[recvq.avail->idx % recvq.num] = recvq.next_avail;
-        /* avail->idx always increments, and wraps naturally at 65536 */
-        recvq.avail->idx++;
-        recvq.next_avail = (recvq.next_avail + 1) % recvq.num;
+	virtq_init_descriptor_chain(&recvq, recvq.next_avail, recv_bufs, 1,
+				    VIRTQ_DESC_F_WRITE);
     } while (recvq.next_avail != 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_RECV);
@@ -155,46 +189,18 @@ static void recv_setup(void)
 /* performance note: we perform a copy into the xmit buffer */
 int virtio_net_xmit_packet(void *data, int len)
 {
-    struct virtq_desc *desc;
-    uint16_t head, next;
-    uint32_t used_descs = 2;
-    int dbg = 1;
-
-    if (xmitq.num_avail < used_descs) {
-        printf("xmit buffer full! next_avail:%d last_used:%d\n",
-               xmitq.next_avail, xmitq.last_used);
-            return -1;
-    }
+    uint16_t head;
 
     head = xmitq.next_avail;
-
-    desc = &(xmitq.desc[head]);
-    desc->addr = (uint64_t) xmit_bufs[head].data;
-    desc->len = sizeof(struct virtio_net_hdr);
-    memset(xmit_bufs[head].data, 0, desc->len);
-    next = (head + 1) % xmitq.num;
-    desc->next = next;
-    desc->flags = VIRTQ_DESC_F_NEXT;
+    memset(xmit_bufs[head].data, 0, sizeof(struct virtio_net_hdr));
+    xmit_bufs[head].len = sizeof(struct virtio_net_hdr);
 
     assert(len <= PKT_BUFFER_LEN);
-    desc = &(xmitq.desc[next]);
-    desc->addr = (uint64_t) xmit_bufs[next].data;
-    desc->len = len;
-    memcpy(xmit_bufs[next].data, data, len);
-    desc->flags = 0;
-    desc->next = 0;
+    memcpy(xmit_bufs[head + 1].data, data, len);
+    xmit_bufs[head + 1].len = len;
 
-    if (dbg)
-        atomic_printf("XMIT: 0x%p next_avail %d last_used %d\n",
-                      desc->addr, xmitq.next_avail, (xmitq.last_used*2) % xmitq.num);
+    virtq_init_descriptor_chain(&xmitq, head, xmit_bufs, 2, 0);
 
-    xmitq.num_avail -= used_descs;
-    /* Memory barriers should be unnecessary with one processor */
-    xmitq.avail->ring[xmitq.avail->idx % xmitq.num] = head;
-    /* avail->idx always increments (once per chain), and wraps naturally at
-     * 65536 */
-    xmitq.avail->idx++;
-    xmitq.next_avail = (xmitq.next_avail + used_descs) % xmitq.num;
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
     return 0;
@@ -248,8 +254,10 @@ void virtio_config_network(uint16_t base, unsigned irq)
 
     /* get the size of the virt queues */
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_RECV);
+    recvq.last_used = recvq.next_avail = 0;
     recvq.num = recvq.num_avail = inw(base + VIRTIO_PCI_QUEUE_SIZE);
     outw(base + VIRTIO_PCI_QUEUE_SEL, VIRTQ_XMIT);
+    xmitq.last_used = xmitq.next_avail = 0;
     xmitq.num = xmitq.num_avail = inw(base + VIRTIO_PCI_QUEUE_SIZE);
     assert(recvq.num <= VIRTQ_NET_MAX_QUEUE_SIZE);
     assert(xmitq.num <= VIRTQ_NET_MAX_QUEUE_SIZE);
@@ -317,23 +325,11 @@ uint8_t *virtio_net_pkt_get(int *size)
 
 static void recv_load_desc(void)
 {
-    struct virtq_desc *desc;
+    memset(recv_bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
+    recv_bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
 
-    if (recvq.num_avail < 1) {
-        printf("recv buffer full! next_avail:%d last_used:%d\n",
-               recvq.next_avail, recvq.last_used);
-            return;
-    }
-
-    desc = &(recvq.desc[recvq.next_avail]);
-    desc->addr = (uint64_t) recv_bufs[recvq.next_avail].data;
-    desc->len = PKT_BUFFER_LEN;
-    desc->flags = VIRTQ_DESC_F_WRITE;
-    /* Memory barriers should be unnecessary with one processor */
-    recvq.avail->ring[recvq.avail->idx % recvq.num] = recvq.next_avail;
-    /* avail->idx always increments, and wraps naturally at 65536 */
-    recvq.avail->idx++;
-    recvq.next_avail = (recvq.next_avail + 1) % recvq.num;
+    virtq_init_descriptor_chain(&recvq, recvq.next_avail, recv_bufs, 1,
+                                VIRTQ_DESC_F_WRITE);
 }
 
 void virtio_net_pkt_put(void)
