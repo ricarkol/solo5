@@ -54,7 +54,6 @@ struct virtio_blk_req {
 
 #define VIRTQ_BLK_MAX_QUEUE_SIZE 8192
 static struct virtio_blk_req *blk_bufs;
-static uint8_t *blk_data;
 static struct virtq blkq;
 #define VIRTQ_BLK  0
 
@@ -248,31 +247,15 @@ void virtio_config_block(uint16_t base, unsigned irq)
            virtio_blk_sectors, VIRTIO_BLK_SECTOR_SIZE,
            virtio_blk_sectors * VIRTIO_BLK_SECTOR_SIZE);
 
-    outw(base + VIRTIO_PCI_QUEUE_SEL, 0);
+    virtq_init_rings(base, &blkq, 0);
 
-    blkq.num = inw(base + VIRTIO_PCI_QUEUE_SIZE);
-
-    printf("block queue size is %d\n", blkq.num);
-    assert(blkq.num <= VIRTQ_BLK_MAX_QUEUE_SIZE);
-
-    blk_data = memalign(4096, VIRTQ_SIZE(blkq.num));
-    assert(blk_data);
-    memset(blk_data, 0, VIRTQ_SIZE(blkq.num));
     blk_bufs = calloc(blkq.num, sizeof (struct virtio_blk_req));
     assert(blk_bufs);
-
-    blkq.desc =  (struct virtq_desc *)(blk_data + VIRTQ_OFF_DESC(blkq.num));
-    blkq.avail = (struct virtq_avail *)(blk_data + VIRTQ_OFF_AVAIL(blkq.num));
-    blkq.used = (struct virtq_used *)(blk_data + VIRTQ_OFF_USED(blkq.num));
 
     virtio_blk_pci_base = base;
     blk_configured = 1;
     intr_register_irq(irq, handle_virtio_blk_interrupt, NULL);
     outb(base + VIRTIO_PCI_STATUS, VIRTIO_PCI_STATUS_DRIVER_OK);
-
-    outb(base + VIRTIO_PCI_QUEUE_SEL, 0);
-    outl(base + VIRTIO_PCI_QUEUE_PFN, (uint64_t)blk_data
-         >> VIRTIO_PCI_QUEUE_ADDR_SHIFT);
 }
 
 
