@@ -33,7 +33,7 @@ void virtq_handle_interrupt(struct virtq *vq)
 
     for (;;) {
         uint16_t desc_idx;
-        struct io_buffer *head_buf;
+        volatile struct io_buffer *head_buf;
 
         if ((vq->used->idx % vq->num) == vq->last_used)
             break;
@@ -42,8 +42,9 @@ void virtq_handle_interrupt(struct virtq *vq)
         desc_idx = e->id;
 
         head_buf = (struct io_buffer *) vq->desc[desc_idx].addr;
-	/* This len will be non-zero for the receive case, and will be a
-         * no-op in the transmit case. */
+
+	/* Overwrite buf->len with the number of bytes written by the device.
+         * This will be 0 for the tx/blk_write case. */
         head_buf->len = e->len;
         head_buf->hw_used = 1;
         assert(e->len <= PKT_BUFFER_LEN);
@@ -58,10 +59,14 @@ void virtq_handle_interrupt(struct virtq *vq)
     }
 }
 
+/*
+ * Create a descriptor chain starting at index head, using vq->bufs also
+ * starting at index head.
+ * Make sure the vq-bufs are cleaned before using them again.
+ */
 int virtq_init_descriptor_chain(struct virtq *vq,
                                 uint16_t head,
-                                uint16_t num,
-                                uint16_t extra_flags)
+                                uint16_t num)
 {
     struct virtq_desc *desc;
     uint16_t i;
@@ -85,17 +90,18 @@ int virtq_init_descriptor_chain(struct virtq *vq,
 	 * 'struct io_buffer'.
          */
         assert((uint64_t) vq->bufs[i].data == (uint64_t) &vq->bufs[i]);
+        vq->bufs[i].hw_used = 0;
 	desc->addr = (uint64_t) vq->bufs[i].data;
 	desc->len = vq->bufs[i].len;
+	desc->flags = VIRTQ_DESC_F_NEXT | vq->bufs[i].extra_flags;
 
 	i = (i + 1) % vq->num;
         desc->next = i;
-	desc->flags = VIRTQ_DESC_F_NEXT | extra_flags;
     }
 
-    /* The last descriptor in the chain needs a next = 0 */
+    /* The last descriptor in the chain does not have a next */
     desc->next = 0;
-    desc->flags = extra_flags;
+    desc->flags &= ~VIRTQ_DESC_F_NEXT;
 
     if (dbg)
         atomic_printf("0x%p next_avail %d last_used %d\n",

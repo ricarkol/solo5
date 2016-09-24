@@ -111,9 +111,8 @@ struct virtq_used {
 #define PKT_BUFFER_LEN 1526
 
 /*
- * Our drivers map each descriptor to an io_buffer. An array of io_buffer's
- * of size virtq.num (same as virtq.desc) is allocated during initialiation
- * by each device driver.
+ * Each one of these io_buffer's map to a descriptor. An array of io_buffer's
+ * of size virtq.num (same as virtq.desc) is allocated during init.
  */
 struct io_buffer {
     uint8_t data[PKT_BUFFER_LEN];
@@ -122,12 +121,12 @@ struct io_buffer {
      * written by the device (via an interrupt) on an rx or read. */
     uint32_t len;
 
-    /* Status of the IO, written by the device (via an interrupt). */
-    uint8_t status;
-
     /* The device set this field to 0 before submitting an IO, and it is set
      * to 1 on completion (via an interrupt). */
-    uint8_t hw_used;
+    volatile uint8_t hw_used;
+
+    /* Extra flags to be added to the corresponding descriptor. */
+    uint16_t extra_flags;
 };
 
 struct virtq {
@@ -167,8 +166,7 @@ static inline le16 *virtq_avail_event(struct virtq *vq)
 void virtq_handle_interrupt(struct virtq *vq);
 int virtq_init_descriptor_chain(struct virtq *vq,
                                 uint16_t head,
-                                uint16_t num,
-                                uint16_t extra_flags);
+                                uint16_t num);
 void virtq_init_rings(uint16_t pci_base, struct virtq *vq, int selector);
 
 #endif /* VIRTQUEUE_H */

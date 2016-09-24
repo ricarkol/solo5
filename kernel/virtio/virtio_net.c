@@ -82,9 +82,8 @@ static void recv_setup(void)
     do {
 	memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
 	recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
-
-	virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1,
-				    VIRTQ_DESC_F_WRITE);
+	recvq.bufs[recvq.next_avail].extra_flags = VIRTQ_DESC_F_WRITE;
+	virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1);
     } while (recvq.next_avail != 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_RECV);
@@ -98,12 +97,14 @@ int virtio_net_xmit_packet(void *data, int len)
     head = xmitq.next_avail;
     memset(xmitq.bufs[head].data, 0, sizeof(struct virtio_net_hdr));
     xmitq.bufs[head].len = sizeof(struct virtio_net_hdr);
+    xmitq.bufs[head].extra_flags = 0;
 
     assert(len <= PKT_BUFFER_LEN);
-    memcpy(xmitq.bufs[head + 1].data, data, len);
-    xmitq.bufs[head + 1].len = len;
+    memcpy(xmitq.bufs[(head + 1) % xmitq.num].data, data, len);
+    xmitq.bufs[(head + 1) % xmitq.num].len = len;
+    xmitq.bufs[(head + 1) % xmitq.num].extra_flags = 0;
 
-    virtq_init_descriptor_chain(&xmitq, head, 2, 0);
+    virtq_init_descriptor_chain(&xmitq, head, 2);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
@@ -223,9 +224,8 @@ static void recv_load_desc(void)
 {
     memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
     recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
-
-    virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1,
-                                VIRTQ_DESC_F_WRITE);
+    recvq.bufs[recvq.next_avail].extra_flags = VIRTQ_DESC_F_WRITE;
+    virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1);
 }
 
 void virtio_net_pkt_put(void)
