@@ -36,7 +36,7 @@
 
 static uint64_t virtio_blk_sectors;
 
-#define VIRTIO_BLK_SECTOR_SIZE    512 
+#define VIRTIO_BLK_SECTOR_SIZE    512
 
 struct virtio_blk_hdr {
     uint32_t type;
