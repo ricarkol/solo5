@@ -28,6 +28,8 @@
 #define VIRTIO_NET_F_GUEST_CSUM	1 /* Guest handles pkts w/ partial csum */
 #define VIRTIO_NET_F_MAC (1 << 5) /* Host has given MAC address. */
 
+#define PKT_BUFFER_LEN 1526
+
 static struct virtq recvq;
 static struct virtq xmitq;
 
@@ -83,7 +85,7 @@ static void recv_setup(void)
 	memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
 	recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
 	recvq.bufs[recvq.next_avail].extra_flags = VIRTQ_DESC_F_WRITE;
-	virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1);
+	assert(virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1) == 0);
     } while (recvq.next_avail != 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_RECV);
@@ -93,6 +95,7 @@ static void recv_setup(void)
 int virtio_net_xmit_packet(void *data, int len)
 {
     uint16_t head;
+    int r;
 
     head = xmitq.next_avail;
     memset(xmitq.bufs[head].data, 0, sizeof(struct virtio_net_hdr));
@@ -104,11 +107,11 @@ int virtio_net_xmit_packet(void *data, int len)
     xmitq.bufs[(head + 1) % xmitq.num].len = len;
     xmitq.bufs[(head + 1) % xmitq.num].extra_flags = 0;
 
-    virtq_init_descriptor_chain(&xmitq, head, 2);
+    r = virtq_init_descriptor_chain(&xmitq, head, 2);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
-    return 0;
+    return r;
 }
 
 
@@ -220,17 +223,17 @@ uint8_t *virtio_net_pkt_get(int *size)
     return buf->data + sizeof(struct virtio_net_hdr);
 }
 
-static void recv_load_desc(void)
+int recv_load_desc(void)
 {
     memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
     recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
     recvq.bufs[recvq.next_avail].extra_flags = VIRTQ_DESC_F_WRITE;
-    virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1);
+    return virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1);
 }
 
 void virtio_net_pkt_put(void)
 {
-    recv_load_desc();
+    assert(recv_load_desc() == 0);
 }
 
 int solo5_net_write_sync(uint8_t *data, int n)

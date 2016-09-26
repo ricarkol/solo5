@@ -208,7 +208,7 @@ static void ping_serve(int quiet)
         p->ping.checksum = checksum(&p->ping,
                 htons(p->ip.length) - sizeof(struct ip));
 
-        if (quiet)
+        if (!quiet)
             puts("Received ping, sending reply\n");
 
         if (solo5_net_write_sync(buf, len) == -1)

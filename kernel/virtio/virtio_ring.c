@@ -47,10 +47,11 @@ void virtq_handle_interrupt(struct virtq *vq)
          * This will be 0 for the tx/blk_write case. */
         head_buf->len = e->len;
         head_buf->completed = 1;
-        assert(e->len <= PKT_BUFFER_LEN);
+        assert(e->len <= MAX_BUFFER_LEN);
 
         vq->num_avail++;
         while (vq->desc[desc_idx].flags & VIRTQ_DESC_F_NEXT) {
+            head_buf->completed = 1;
             vq->num_avail++;
             desc_idx = vq->desc[desc_idx].next;
         }
@@ -83,6 +84,8 @@ int virtq_init_descriptor_chain(struct virtq *vq,
 
     for (i = head; used_descs > 0; used_descs--) {
 	desc = &(vq->desc[i]);
+
+        assert(vq->bufs[i].len <= MAX_BUFFER_LEN);
 
         /*
 	 * The first field of a "struct io_buffer" is the "data" field, so in

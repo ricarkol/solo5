@@ -108,14 +108,15 @@ struct virtq_used {
         /* Only if VIRTIO_F_EVENT_IDX: le16 avail_event; */
 };
 
-#define PKT_BUFFER_LEN 1526
+/* This is the max buffer length per descriptor. */
+#define MAX_BUFFER_LEN 1526
 
 /*
  * Each one of these io_buffer's map to a descriptor. An array of io_buffer's
  * of size virtq.num (same as virtq.desc) is allocated during init.
  */
 struct io_buffer {
-    uint8_t data[PKT_BUFFER_LEN];
+    uint8_t data[MAX_BUFFER_LEN];
 
     /* Data length in Bytes. It is written by the driver on a tx/write, or
      * by the device on a rx/read on interrupt handling (do not remove the
@@ -165,9 +166,17 @@ static inline le16 *virtq_avail_event(struct virtq *vq)
 }
 
 void virtq_handle_interrupt(struct virtq *vq);
+
+/*
+ * Create a descriptor chain starting at index head, using vq->bufs also
+ * starting at index head. Num is the number of descriptors (and number of bufs).
+ *
+ * Returns 0 on success.
+ */
 int virtq_init_descriptor_chain(struct virtq *vq,
                                 uint16_t head,
                                 uint16_t num);
+
 void virtq_init_rings(uint16_t pci_base, struct virtq *vq, int selector);
 
 #endif /* VIRTQUEUE_H */
