@@ -117,13 +117,14 @@ struct virtq_used {
 struct io_buffer {
     uint8_t data[PKT_BUFFER_LEN];
 
-    /* Data length in Bytes. It is written by the driver on a tx or write, or
-     * written by the device (via an interrupt) on an rx or read. */
-    uint32_t len;
+    /* Data length in Bytes. It is written by the driver on a tx/write, or
+     * by the device on a rx/read on interrupt handling (do not remove the
+     * volatile). */
+    volatile uint32_t len;
 
-    /* The device set this field to 0 before submitting an IO, and it is set
-     * to 1 on completion (via an interrupt). */
-    volatile uint8_t hw_used;
+    /* The driver sets this field to 0 before submitting an IO, and it is set
+     * to 1 at completion on interrupt handling (hence the volatile). */
+    volatile uint8_t completed;
 
     /* Extra flags to be added to the corresponding descriptor. */
     uint16_t extra_flags;

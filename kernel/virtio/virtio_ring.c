@@ -33,7 +33,7 @@ void virtq_handle_interrupt(struct virtq *vq)
 
     for (;;) {
         uint16_t desc_idx;
-        volatile struct io_buffer *head_buf;
+        struct io_buffer *head_buf;
 
         if ((vq->used->idx % vq->num) == vq->last_used)
             break;
@@ -46,7 +46,7 @@ void virtq_handle_interrupt(struct virtq *vq)
 	/* Overwrite buf->len with the number of bytes written by the device.
          * This will be 0 for the tx/blk_write case. */
         head_buf->len = e->len;
-        head_buf->hw_used = 1;
+        head_buf->completed = 1;
         assert(e->len <= PKT_BUFFER_LEN);
 
         vq->num_avail++;
@@ -90,7 +90,7 @@ int virtq_init_descriptor_chain(struct virtq *vq,
 	 * 'struct io_buffer'.
          */
         assert((uint64_t) vq->bufs[i].data == (uint64_t) &vq->bufs[i]);
-        vq->bufs[i].hw_used = 0;
+        vq->bufs[i].completed = 0;
 	desc->addr = (uint64_t) vq->bufs[i].data;
 	desc->len = vq->bufs[i].len;
 	desc->flags = VIRTQ_DESC_F_NEXT | vq->bufs[i].extra_flags;

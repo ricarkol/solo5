@@ -114,7 +114,7 @@ static int virtio_blk_op_sync(uint32_t type,
     /* XXX need timeout or something, because this can hang... sync
      * should probably go away anyway
      */
-    while (!head_buf->hw_used)
+    while (!head_buf->completed)
         ;
 
     ret = (*(uint8_t *) status_buf) != VIRTIO_BLK_S_OK;
