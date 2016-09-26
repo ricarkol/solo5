@@ -20,9 +20,6 @@
 #include "virtio_ring.h"
 #include "virtio_pci.h"
 
-#define VIRTQ_RECV 0
-#define VIRTQ_XMIT 1
-
 /* The feature bitmap for virtio net */
 #define VIRTIO_NET_F_CSUM	0     /* Host handles pkts w/ partial csum */
 #define VIRTIO_NET_F_GUEST_CSUM	1 /* Guest handles pkts w/ partial csum */
@@ -32,6 +29,9 @@
 
 static struct virtq recvq;
 static struct virtq xmitq;
+
+#define VIRTQ_RECV 0
+#define VIRTQ_XMIT 1
 
 /* This header comes first in the scatter-gather list.
  * If VIRTIO_F_ANY_LAYOUT is not negotiated, it must
