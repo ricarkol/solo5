@@ -173,9 +173,9 @@ void virtq_handle_interrupt(struct virtq *vq);
  *
  * Returns 0 on success.
  */
-int virtq_init_descriptor_chain(struct virtq *vq,
-                                uint16_t head,
-                                uint16_t num);
+int virtq_add_descriptor_chain(struct virtq *vq,
+                               uint16_t head,
+                               uint16_t num);
 
 void virtq_init_rings(uint16_t pci_base, struct virtq *vq, int selector);
 

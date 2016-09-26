@@ -85,7 +85,7 @@ static void recv_setup(void)
 	memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
 	recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
 	recvq.bufs[recvq.next_avail].extra_flags = VIRTQ_DESC_F_WRITE;
-	assert(virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1) == 0);
+	assert(virtq_add_descriptor_chain(&recvq, recvq.next_avail, 1) == 0);
     } while (recvq.next_avail != 0);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_RECV);
@@ -107,7 +107,7 @@ int virtio_net_xmit_packet(void *data, int len)
     xmitq.bufs[(head + 1) % xmitq.num].len = len;
     xmitq.bufs[(head + 1) % xmitq.num].extra_flags = 0;
 
-    r = virtq_init_descriptor_chain(&xmitq, head, 2);
+    r = virtq_add_descriptor_chain(&xmitq, head, 2);
 
     outw(virtio_net_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_XMIT);
 
@@ -228,7 +228,7 @@ int recv_load_desc(void)
     memset(recvq.bufs[recvq.next_avail].data, 0, PKT_BUFFER_LEN);
     recvq.bufs[recvq.next_avail].len = PKT_BUFFER_LEN;
     recvq.bufs[recvq.next_avail].extra_flags = VIRTQ_DESC_F_WRITE;
-    return virtq_init_descriptor_chain(&recvq, recvq.next_avail, 1);
+    return virtq_add_descriptor_chain(&recvq, recvq.next_avail, 1);
 }
 
 void virtio_net_pkt_put(void)

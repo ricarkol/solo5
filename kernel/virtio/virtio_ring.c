@@ -65,9 +65,9 @@ void virtq_handle_interrupt(struct virtq *vq)
  * starting at index head.
  * Make sure the vq-bufs are cleaned before using them again.
  */
-int virtq_init_descriptor_chain(struct virtq *vq,
-                                uint16_t head,
-                                uint16_t num)
+int virtq_add_descriptor_chain(struct virtq *vq,
+                               uint16_t head,
+                               uint16_t num)
 {
     struct virtq_desc *desc;
     uint16_t i;

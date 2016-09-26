@@ -89,7 +89,7 @@ static uint16_t virtio_blk_op(uint32_t type,
     status_buf->len = sizeof(uint8_t);
     status_buf->extra_flags = VIRTQ_DESC_F_WRITE;
 
-    virtq_init_descriptor_chain(&blkq, head, 3);
+    virtq_add_descriptor_chain(&blkq, head, 3);
 
     outw(virtio_blk_pci_base + VIRTIO_PCI_QUEUE_NOTIFY, VIRTQ_BLK);
 
