@@ -161,7 +161,7 @@ static void ping_serve(int quiet)
 
         if (memcmp(p->ether.target, macaddr, HLEN_ETHER) &&
             memcmp(p->ether.target, macaddr_brd, HLEN_ETHER))
-            goto out; /* not ether addressed to us */
+            puts("no match\n");
 
         if (p->ether.type != htons(ETHERTYPE_IP))
             goto out; /* not an IP packet */
