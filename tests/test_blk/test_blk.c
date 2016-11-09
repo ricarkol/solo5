@@ -2,7 +2,7 @@
 
 #define SECTOR_SIZE	512
 
-int check_sector_write(uint64_t offset)
+int check_sector_write(uint64_t sector)
 {
     uint8_t sector_write[SECTOR_SIZE];
     uint8_t sector_read[SECTOR_SIZE];
@@ -12,8 +12,8 @@ int check_sector_write(uint64_t offset)
     for (i = 0; i < SECTOR_SIZE; i++)
         sector_write[i] = '0' + i % 10;
 
-    solo5_blk_write_sync(offset, sector_write, SECTOR_SIZE);
-    solo5_blk_read_sync(offset, sector_read, &n);
+    solo5_blk_write_sync(sector, sector_write, SECTOR_SIZE);
+    solo5_blk_read_sync(sector, sector_read, &n);
 
     if (n != SECTOR_SIZE)
         return 1;
@@ -34,7 +34,7 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
 
     /* Write and read/check one tenth of the disk. */
     for (i = 0; i < solo5_blk_sectors(); i += 10) {
-        if (check_sector_write(i * SECTOR_SIZE))
+        if (check_sector_write(i))
             /* Check failed */
             return 1;
     }

@@ -70,7 +70,7 @@ static uint16_t virtio_blk_op(uint32_t type,
 
     hdr.type = type;
     hdr.ioprio = 0;
-    hdr.sector = sector;
+    hdr.sector = sector * VIRTIO_BLK_SECTOR_SIZE;
 
     /* The header buf */
     memcpy(head_buf->data, &hdr, sizeof(struct virtio_blk_hdr));
