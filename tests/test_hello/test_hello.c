@@ -1,5 +1,10 @@
 #include "solo5.h"
 
+static void trace()
+{
+    __asm__ __volatile__("outl %0,%1" : : "a" (0), "dN" ((short) 777));
+}
+
 static size_t strlen(const char *s)
 {
     size_t len = 0;
@@ -29,6 +34,7 @@ int solo5_app_main(char *cmdline)
     solo5_console_write(cmdline, len);
 
     puts("'\n");
+    trace();
 
     return 0;
 }

@@ -263,6 +263,8 @@ static void load_code(const char *file, uint8_t *mem,     /* IN */
     mprotect((void *) ((uint64_t) mem + p_end), 0x1000, PROT_NONE);
     *p_end += 0x1000;
 
+
+    printf("entry point %p\n",  (void *) hdr.e_entry);
     *p_entry = hdr.e_entry;
 }
 
@@ -490,6 +492,9 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem)
             case UKVM_PORT_POLL:
                 ukvm_port_poll(mem, paddr);
                 break;
+            case 777:
+		printf("trace!\n");
+		break;
             default:
                 errx(1, "Invalid guest port access: port=0x%x", run->io.port);
             };
@@ -649,6 +654,11 @@ int main(int argc, char **argv)
         err(1, "Error allocating guest memory");
 
     load_code(elffile, mem, &elf_entry, &kernel_end);
+
+    {
+        unsigned char *inst = mem + elf_entry + 0x54f;
+        printf("%02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
+    }
 
     struct kvm_userspace_memory_region region = {
         .slot = 0,
