@@ -91,6 +91,8 @@ struct ukvm_module *modules[] = {
 #define KVM_32BIT_GAP_SIZE    (768 << 20)
 #define KVM_32BIT_GAP_START    (KVM_32BIT_MAX_MEM_SIZE - KVM_32BIT_GAP_SIZE)
 
+uint8_t *global_mem;
+
 void setup_boot_info(uint8_t *mem,
                     uint64_t size,
                     uint64_t kernel_end,
@@ -445,7 +447,13 @@ void ukvm_port_poll(uint8_t *mem, uint64_t paddr)
      * Guest execution is blocked during the ppoll() call, note that
      * interrupts will not be injected.
      */
-    rc = ppoll(fds, num_fds, &ts, NULL);
+    for (;;) {
+        rc = ppoll(fds, num_fds, &ts, NULL);
+        if (rc == -1)
+            continue;
+        else
+            break;
+    }
     assert(rc >= 0);
     t->ret = rc;
 }
@@ -549,6 +557,12 @@ void sig_handler(int signo)
     exit(0);
 }
 
+void sig_usr1_handler(int signo)
+{
+    unsigned char *inst = global_mem + 0x100000 + 0x54f;
+    printf("%02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
+}
+
 static void usage(const char *prog)
 {
     int m;
@@ -625,6 +639,9 @@ int main(int argc, char **argv)
     if (signal(SIGINT, sig_handler) == SIG_ERR)
         err(1, "Could not install signal handler");
 
+    if (signal(SIGUSR1, sig_usr1_handler) == SIG_ERR)
+        err(1, "Could not install signal handler");
+
     kvm = open("/dev/kvm", O_RDWR | O_CLOEXEC);
     if (kvm == -1)
         err(1, "Could not open: /dev/kvm");
@@ -653,12 +670,9 @@ int main(int argc, char **argv)
     if (mem == MAP_FAILED)
         err(1, "Error allocating guest memory");
 
-    load_code(elffile, mem, &elf_entry, &kernel_end);
+    global_mem = mem;
 
-    {
-        unsigned char *inst = mem + elf_entry + 0x54f;
-        printf("%02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
-    }
+    load_code(elffile, mem, &elf_entry, &kernel_end);
 
     struct kvm_userspace_memory_region region = {
         .slot = 0,

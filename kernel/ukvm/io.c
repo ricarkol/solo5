@@ -15,6 +15,23 @@ int solo5_net_write_sync(uint8_t *data, int n)
     return wr.ret;
 }
 
+int solo5_net_write_sync_hook(uint8_t *data, int n)
+{
+    volatile struct ukvm_netwrite wr;
+
+    wr.data = data;
+    wr.len = n;
+    wr.ret = 0;
+
+    // trace
+    __asm__ __volatile__("outl %0,%1" : : "a" (0), "dN" ((short) 777));
+
+    outl(UKVM_PORT_NETWRITE, ukvm_ptr(&wr));
+    cc_barrier();
+
+    return wr.ret;
+}
+
 int solo5_net_read_sync(uint8_t *data, int *n)
 {
     volatile struct ukvm_netread rd;
