@@ -554,18 +554,8 @@ int setup_modules(int vcpufd, uint8_t *mem)
 void hook_jmp(int addr, int new_dest)
 {
         unsigned char *inst = global_mem + addr;
-        //unsigned char inst2[10];
-	//int op_str;
-
-	printf("before %02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
 
 	*((int *) &inst[1]) = new_dest - (addr + 5);
-	printf("after %02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
-        //memcpy(inst2, inst, 5);
-	//op_str = new_dest - (addr + 5);
-	//memcpy(inst2 + 1, &op_str, 4);
-	//memcpy(inst + 1, &op_str, 4);
-	//printf("after %02x %02x %02x %02x %02x\n", inst2[0], inst2[1], inst2[2], inst2[3], inst2[4]);
 }
 
 void sig_handler(int signo)
@@ -574,12 +564,21 @@ void sig_handler(int signo)
     exit(0);
 }
 
+static int tracing_on = 0;
+
 void sig_usr1_handler(int signo)
 {
-    hook_jmp(0x106651, 0x100120);
-    hook_jmp(0x1068be, 0x100120);
-    //hook_jmp(0x106651, 0x1000e0);
-    //hook_jmp(0x1068be, 0x1000e0);
+    if (!tracing_on) {
+        printf("tracing ON!\n");
+        hook_jmp(0x106651, 0x100120);
+        hook_jmp(0x1068be, 0x100120);
+        tracing_on = 1;
+    } else {
+        printf("tracing OFF!\n");
+        hook_jmp(0x106651, 0x1000e0);
+        hook_jmp(0x1068be, 0x1000e0);
+        tracing_on = 0;
+    }
 }
 
 static void usage(const char *prog)
