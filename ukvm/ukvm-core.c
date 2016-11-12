@@ -262,9 +262,8 @@ static void load_code(const char *file, uint8_t *mem,     /* IN */
      * Not needed, but let's give it an empty page at the end for "safety".
      * And, even protect it against any type of access.
      */
-    //mprotect((void *) ((uint64_t) mem + p_end), 0x1000, PROT_NONE);
-    //*p_end += 0x1000;
-
+    mprotect((void *) ((uint64_t) mem + p_end), 0x1000, PROT_NONE);
+    *p_end += 0x1000;
 
     printf("entry point %p\n",  (void *) hdr.e_entry);
     *p_entry = hdr.e_entry;
@@ -501,7 +500,7 @@ static int vcpu_loop(struct kvm_run *run, int vcpufd, uint8_t *mem)
                 ukvm_port_poll(mem, paddr);
                 break;
             case 777:
-		printf("trace!\n");
+		printf("net out\n");
 		break;
             default:
                 errx(1, "Invalid guest port access: port=0x%x", run->io.port);
