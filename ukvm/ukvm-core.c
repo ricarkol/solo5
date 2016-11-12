@@ -250,8 +250,8 @@ static void load_code(const char *file, uint8_t *mem,     /* IN */
         memset(mem + paddr + filesz, 0, memsz - filesz);
 
         /* Protect the executable code */
-        if (phdr[ph_i].p_flags & PF_X)
-            mprotect((void *) dst, memsz, PROT_EXEC | PROT_READ);
+        //if (phdr[ph_i].p_flags & PF_X)
+        //    mprotect((void *) dst, memsz, PROT_EXEC | PROT_READ);
 
         _end = ALIGN_UP(paddr + memsz, align);
         if (_end > *p_end)
@@ -262,8 +262,8 @@ static void load_code(const char *file, uint8_t *mem,     /* IN */
      * Not needed, but let's give it an empty page at the end for "safety".
      * And, even protect it against any type of access.
      */
-    mprotect((void *) ((uint64_t) mem + p_end), 0x1000, PROT_NONE);
-    *p_end += 0x1000;
+    //mprotect((void *) ((uint64_t) mem + p_end), 0x1000, PROT_NONE);
+    //*p_end += 0x1000;
 
 
     printf("entry point %p\n",  (void *) hdr.e_entry);
@@ -551,6 +551,23 @@ int setup_modules(int vcpufd, uint8_t *mem)
     return 0;
 }
 
+void hook_jmp(int addr, int new_dest)
+{
+        unsigned char *inst = global_mem + addr;
+        //unsigned char inst2[10];
+	//int op_str;
+
+	printf("before %02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
+
+	*((int *) &inst[1]) = new_dest - (addr + 5);
+	printf("after %02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
+        //memcpy(inst2, inst, 5);
+	//op_str = new_dest - (addr + 5);
+	//memcpy(inst2 + 1, &op_str, 4);
+	//memcpy(inst + 1, &op_str, 4);
+	//printf("after %02x %02x %02x %02x %02x\n", inst2[0], inst2[1], inst2[2], inst2[3], inst2[4]);
+}
+
 void sig_handler(int signo)
 {
     warnx("Exiting on signal %d", signo);
@@ -559,8 +576,10 @@ void sig_handler(int signo)
 
 void sig_usr1_handler(int signo)
 {
-    unsigned char *inst = global_mem + 0x100000 + 0x54f;
-    printf("%02x %02x %02x %02x %02x\n", inst[0], inst[1], inst[2], inst[3], inst[4]);
+    hook_jmp(0x106651, 0x100120);
+    hook_jmp(0x1068be, 0x100120);
+    //hook_jmp(0x106651, 0x1000e0);
+    //hook_jmp(0x1068be, 0x1000e0);
 }
 
 static void usage(const char *prog)
