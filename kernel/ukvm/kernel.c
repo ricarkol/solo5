@@ -20,10 +20,10 @@
 
 #include "kernel.h"
 
+
 void _start(struct ukvm_boot_info *bi)
 {
     int ret;
-
     printf("            |      ___|\n");
     printf("  __|  _ \\  |  _ \\ __ \\\n");
     printf("\\__ \\ (   | | (   |  ) |\n");
@@ -31,7 +31,7 @@ void _start(struct ukvm_boot_info *bi)
 
     mem_init(bi->mem_size, bi->kernel_end);
 
-    time_init();
+    //time_init();
 
     ret = solo5_app_main((char *)bi->cmdline);
     printf("Solo5: solo5_app_main() returned with %d\n", ret);

@@ -78,15 +78,27 @@ struct ukvm_module *modules[] = {
  */
 
 #define BOOT_GDT     0x1000
-#define BOOT_INFO    0x2000
+#define BOOT_TSS     0x3000
+#define BOOT_INFO    0x4000
+#define BOOT_INTR_STACK    0x5000
+#define BOOT_TRAP_STACK    0x6000
+#define BOOT_NMI_STACK    0x7000
 #define BOOT_PML4    0x10000
 #define BOOT_PDPTE   0x11000
 #define BOOT_PDE     0x12000
 
 #define BOOT_GDT_NULL    0
-#define BOOT_GDT_CODE    1
-#define BOOT_GDT_DATA    2
-#define BOOT_GDT_MAX     3
+#define BOOT_GDT_KCODE    1
+#define BOOT_GDT_KDATA    3
+#define BOOT_GDT_CODE    4
+#define BOOT_GDT_DATA    5
+#define BOOT_GDT_TSS_LO  6
+#define BOOT_GDT_TSS_HI  7
+#define BOOT_GDT_TSS  BOOT_GDT_TSS_LO
+#define BOOT_GDT_MAX     9
+
+#define GDT_DESC_OFFSET(n) ((n) * 0x8)
+
 
 #define KVM_32BIT_MAX_MEM_SIZE  (1ULL << 32)
 #define KVM_32BIT_GAP_SIZE    (768 << 20)
@@ -304,7 +316,7 @@ static void setup_system_64bit(struct kvm_sregs *sregs)
     cr4 = cr4 | X86_CR4_FXSR | X86_CR4_XMM; /* OSFXSR and OSXMMEXCPT */
 
     sregs->cr0 = cr0;
-    sregs->efer = efer;
+    sregs->efer = efer | X86_EFER_NXE;
     sregs->cr4 = cr4;
 }
 
@@ -328,40 +340,107 @@ static void setup_system_page_tables(struct kvm_sregs *sregs, uint8_t *mem)
     memset(pdpte, 0, 4096);
     memset(pde, 0, 4096);
 
-    *pml4 = BOOT_PDPTE | (X86_PDPT_P | X86_PDPT_RW);
-    *pdpte = BOOT_PDE | (X86_PDPT_P | X86_PDPT_RW);
+    *pml4 = BOOT_PDPTE | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_USR);
+    *pdpte = BOOT_PDE | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_USR);
     for (paddr = 0; paddr < GUEST_SIZE; paddr += GUEST_PAGE_SIZE, pde++)
-        *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS);
+        *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS | X86_PDPT_USR);
 
     sregs->cr3 = BOOT_PML4;
     sregs->cr4 |= X86_CR4_PAE;
     sregs->cr0 |= X86_CR0_PG;
 }
 
-static void setup_system_gdt(struct kvm_sregs *sregs,
+void print_kvm_segment(struct kvm_segment code_seg)
+{
+    printf("%lx %x %x sel=%x %x dpl=%x %x %x %x %x %x\n",
+                                (unsigned long) code_seg.base, code_seg.limit,
+                                code_seg.type, code_seg.selector,
+                                code_seg.present, code_seg.dpl,
+                                code_seg.db, code_seg.s,
+                                code_seg.l, code_seg.g, code_seg.avl);
+}
+
+
+// copied from https://searchco.de/file/101550660/p42/SysCore/Hal/gdt.cpp#l-87
+void gdt_set_descriptor(struct gdt_descriptor *_gdt, uint8_t i, uint64_t base,
+                        uint64_t limit, uint8_t access, uint8_t grand) {
+	memset ((void*)&_gdt[i], 0, sizeof (struct gdt_descriptor));
+	_gdt[i].baseLo	= (uint16_t)(base & 0xffff);
+	_gdt[i].baseMid	= (uint8_t)((base >> 16) & 0xff);
+	_gdt[i].baseHi	= (uint8_t)((base >> 24) & 0xff);
+	_gdt[i].limit	= (uint16_t)(limit & 0xffff);
+	_gdt[i].flags = access;
+	_gdt[i].grand = (uint8_t)((limit >> 16) & 0x0f);
+	_gdt[i].grand |= grand & 0xf0;
+}
+
+static void setup_system_gdt(int vcpufd, struct kvm_sregs *sregs,
                              uint8_t *mem,
                              uint64_t off)
 {
-    uint64_t *gdt = (uint64_t *) (mem + off);
+    struct gdt_descriptor *gdt = (struct gdt_descriptor *) (mem + off);
     struct kvm_segment data_seg, code_seg;
+    struct kvm_segment kdata_seg, kcode_seg;
 
-    /* flags, base, limit */
-    gdt[BOOT_GDT_NULL] = GDT_ENTRY(0, 0, 0);
-    gdt[BOOT_GDT_CODE] = GDT_ENTRY(0xA09B, 0, 0xFFFFF);
-    gdt[BOOT_GDT_DATA] = GDT_ENTRY(0xC093, 0, 0xFFFFF);
+    // TSS setup doesn't seem to be needed, unless we set interrupts
+    // struct kvm_segment tss_seg;
+    // struct tss *cpu_tss = (struct tss *) (mem + BOOT_TSS);
+
+    gdt_set_descriptor(gdt, BOOT_GDT_NULL, 0, 0, 0, 0);
+
+    gdt_set_descriptor (gdt, BOOT_GDT_KCODE,0,0xfffff,
+	I86_GDT_DESC_READWRITE|I86_GDT_DESC_EXEC_CODE|I86_GDT_DESC_CODEDATA|
+	I86_GDT_DESC_MEMORY, I86_GDT_GRAND_4K |
+	I86_GDT_GRAND_LIMITHI_MASK | I86_GDT_GRAND_64_MODE);
+
+    gdt_set_descriptor (gdt, BOOT_GDT_KDATA,0,0xfffff,
+	I86_GDT_DESC_READWRITE|I86_GDT_DESC_CODEDATA|I86_GDT_DESC_MEMORY,
+	I86_GDT_GRAND_4K | I86_GDT_GRAND_LIMITHI_MASK);
+
+    gdt_set_descriptor (gdt, BOOT_GDT_CODE,0,0xfffff,
+	I86_GDT_DESC_READWRITE|I86_GDT_DESC_EXEC_CODE|I86_GDT_DESC_CODEDATA|
+	I86_GDT_DESC_MEMORY|I86_GDT_DESC_DPL,
+	I86_GDT_GRAND_4K | I86_GDT_GRAND_LIMITHI_MASK | I86_GDT_GRAND_64_MODE);
+
+    gdt_set_descriptor (gdt, BOOT_GDT_DATA,0,0xfffff,
+	I86_GDT_DESC_READWRITE|I86_GDT_DESC_CODEDATA|I86_GDT_DESC_MEMORY|
+	I86_GDT_DESC_DPL,
+	I86_GDT_GRAND_4K | I86_GDT_GRAND_LIMITHI_MASK);
+
+    // gdt_set_descriptor (gdt, BOOT_GDT_TSS, BOOT_TSS, sizeof(struct tss)-1,
+    //   I86_GDT_DESC_ACCESS|I86_GDT_DESC_EXEC_CODE|I86_GDT_DESC_DPL|
+    //   I86_GDT_DESC_MEMORY, 0);
+
+    GDT_TO_KVM_SEGMENT(kcode_seg, ((uint64_t *) gdt), BOOT_GDT_KCODE);
+    GDT_TO_KVM_SEGMENT(kdata_seg, ((uint64_t *) gdt), BOOT_GDT_KDATA);
+    GDT_TO_KVM_SEGMENT(code_seg, ((uint64_t *) gdt), BOOT_GDT_CODE);
+    GDT_TO_KVM_SEGMENT(data_seg, ((uint64_t *) gdt), BOOT_GDT_DATA);
+    //GDT_TO_KVM_SEGMENT(tss_seg, ((uint64_t *) gdt), BOOT_GDT_TSS);
+
+    print_kvm_segment(kcode_seg);
+    print_kvm_segment(kdata_seg);
+    print_kvm_segment(code_seg);
+    print_kvm_segment(data_seg);
+    //print_kvm_segment(tss_seg);
+
+    //memset(cpu_tss, 0, sizeof(struct tss));
+    //cpu_tss->ist[0] = (uint64_t) BOOT_INTR_STACK;
+    //cpu_tss->ist[1] = (uint64_t) BOOT_TRAP_STACK;
+    //cpu_tss->ist[2] = (uint64_t) BOOT_NMI_STACK;
 
     sregs->gdt.base = off;
     sregs->gdt.limit = (sizeof(uint64_t) * BOOT_GDT_MAX) - 1;
-
-    GDT_TO_KVM_SEGMENT(code_seg, gdt, BOOT_GDT_CODE);
-    GDT_TO_KVM_SEGMENT(data_seg, gdt, BOOT_GDT_DATA);
-
     sregs->cs = code_seg;
     sregs->ds = data_seg;
     sregs->es = data_seg;
     sregs->fs = data_seg;
     sregs->gs = data_seg;
     sregs->ss = data_seg;
+    //sregs->tr = tss_seg;
+
+    // so the compiler doesn't complain
+    kcode_seg = kcode_seg;
+    kdata_seg = kdata_seg;
 }
 
 static void setup_system(int vcpufd, uint8_t *mem)
@@ -374,7 +453,7 @@ static void setup_system(int vcpufd, uint8_t *mem)
     if (ret == -1)
         err(1, "KVM: ioctl (GET_SREGS) failed");
 
-    setup_system_gdt(&sregs, mem, BOOT_GDT);
+    setup_system_gdt(vcpufd, &sregs, mem, BOOT_GDT);
     setup_system_page_tables(&sregs, mem);
     setup_system_64bit(&sregs);
 
@@ -685,7 +764,11 @@ int main(int argc, char **argv)
         .rip = elf_entry,
         .rax = 2,
         .rbx = 2,
-        .rflags = 0x2,
+        // .rflags = 0x2,
+	// Allow ring 3 to do in/out by setting flag 0x3000. Although it seems
+	// to be needed only if we setup interrupts, which is not the case
+	// here.  Anyway, leeting it like this until we enable interrupts.
+        .rflags = 0x3002,
         .rsp = GUEST_SIZE - 8,  /* x86_64 ABI requires ((rsp + 8) % 16) == 0 */
         .rdi = BOOT_INFO,       /* size arg in kernel main */
     };
