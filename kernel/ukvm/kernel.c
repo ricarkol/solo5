@@ -20,6 +20,9 @@
 
 #include "kernel.h"
 
+void _jump_usermode();
+void tss_init();
+
 void _start(struct ukvm_boot_info *bi)
 {
     int ret;
@@ -32,12 +35,14 @@ void _start(struct ukvm_boot_info *bi)
     gdt_init();
     mem_init(bi->mem_size, bi->kernel_end);
     intr_init();
+    intr_enable();
+    tss_init();
 
     /* for floating point */
     cpu_sse_enable();
     time_init();
 
-    intr_enable();
+    _jump_usermode();
 
     ret = solo5_app_main((char *)bi->cmdline);
     printf("Solo5: solo5_app_main() returned with %d\n", ret);

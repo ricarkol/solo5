@@ -44,13 +44,15 @@
 /* We have already set up the GDT for the kernel.  Here are the
  * descriptor numbers (useful for when the kernel sets up the IDT)
  */
-#define GDT_NUM_ENTRIES 6
+#define GDT_NUM_ENTRIES 9
 #define GDT_DESC_NULL 0
 #define GDT_DESC_CODE 1
 /* 2 == unused / 32-bit bootstrap */
 #define GDT_DESC_DATA 3
-#define GDT_DESC_TSS_LO  4
-#define GDT_DESC_TSS_HI  5
+#define GDT_DESC_USR_CODE 4
+#define GDT_DESC_USR_DATA 5
+#define GDT_DESC_TSS_LO  6
+#define GDT_DESC_TSS_HI  7
 #define GDT_DESC_TSS  GDT_DESC_TSS_LO
 #define GDT_DESC_OFFSET(n) ((n) * 0x8)
 

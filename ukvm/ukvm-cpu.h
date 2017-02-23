@@ -63,6 +63,8 @@
 #define X86_PDPT_P              _BITUL(X86_PDPT_P_BIT)
 #define X86_PDPT_RW_BIT         1 /* Writable */
 #define X86_PDPT_RW             _BITUL(X86_PDPT_RW_BIT)
+#define X86_PDPT_USR_BIT        2 /* usr */
+#define X86_PDPT_USR             _BITUL(X86_PDPT_USR_BIT)
 #define X86_PDPT_PS_BIT         7 /* Page size */
 #define X86_PDPT_PS             _BITUL(X86_PDPT_PS_BIT)
 

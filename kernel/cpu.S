@@ -64,3 +64,31 @@ ENTRY(cpu_sse_enable)
 
     ret
 END(cpu_sse_enable)
+
+ENTRY(test_user_function)
+    jmp test_user_function
+    cli
+    hlt
+    jmp test_user_function
+END(test_user_function)
+
+ENTRY(_jump_usermode)
+     cli
+     movq $0x2b,%rax
+     movq %rax, %fs 
+     movq %rax, %gs
+     movq %rax, %es 
+     movq %rax, %ds
+
+     pushq $0x2b
+     pushq %rsp
+     pushfq
+
+     popq %rax
+     xorq %rax, %rax
+     pushq %rax
+
+     pushq $0x23
+     pushq $test_user_function
+     iretq
+END(_jump_usermode)

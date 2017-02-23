@@ -125,6 +125,7 @@ struct tss {
     uint16_t iomap_base;
 } __attribute__((packed));
 
+
 struct tss_desc {
     uint64_t limit_lo:16;
     uint64_t base_lo:24;
@@ -146,30 +147,39 @@ static char cpu_intr_stack[4096]; /* IST1 */
 static char cpu_trap_stack[4096]; /* IST2 */
 static char cpu_nmi_stack[4096];  /* IST3 */
 
-static void tss_init(void)
+void tss_init(void)
 {
     extern uint64_t cpu_gdt64[];
     struct tss_desc *td = (void *)&cpu_gdt64[GDT_DESC_TSS_LO];
 
+    cpu_tss.rsp[0] = 0x08;
+    cpu_tss.rsp[1] = 0x08;
+    cpu_tss.rsp[2] = 0x08;
+
     cpu_tss.ist[0] = (uint64_t)&cpu_intr_stack[sizeof cpu_intr_stack];
     cpu_tss.ist[1] = (uint64_t)&cpu_trap_stack[sizeof cpu_trap_stack];
     cpu_tss.ist[2] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
-    td->limit_lo = sizeof(cpu_tss);
+    cpu_tss.ist[3] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
+    cpu_tss.ist[4] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
+    cpu_tss.ist[5] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
+    cpu_tss.ist[6] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
+
+    td->limit_lo = sizeof(cpu_tss) - 1;
     td->base_lo = (uint64_t)&cpu_tss;
     td->type = 0x9;
-    td->dpl = 0;
+    td->dpl = 3;
     td->p = 1;
     td->limit_hi = 0;
     td->gran = 0;
     td->base_hi = (uint64_t)&cpu_tss >> 24;
     td->zero = 0;
 
-    cpu_tss_load(GDT_DESC_TSS_LO*8);
+    cpu_tss_load(GDT_DESC_TSS_LO*8 + 3);
+    assert(GDT_DESC_TSS_LO*8 + 3 == 0x33);
 }
 
 void intr_init(void)
 {
-    tss_init();
     idt_init();
     platform_intr_init();
 }
@@ -192,8 +202,10 @@ static char *traps[32] = {
 
 void trap_handler(uint64_t num, struct trap_regs *regs)
 {
-    printf("Solo5: trap: type=%s ec=0x%lx rip=0x%lx rsp=0x%lx rflags=0x%lx\n",
-        traps[num], regs->ec, regs->rip, regs->rsp, regs->rflags);
+    printf("Solo5: trap: type=%s ec=0x%lx rip=0x%lx rsp=0x%lx "
+	   "rflags=0x%lx cs=0x%lx ss=0x%lx\n",
+        traps[num], regs->ec, regs->rip, regs->rsp, regs->rflags,
+        regs->cs, regs->ss);
     if (num == 14)
         printf("Solo5: trap: cr2=0x%lx\n", regs->cr2);
     PANIC("Fatal trap");

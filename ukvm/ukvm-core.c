@@ -318,10 +318,10 @@ static void setup_system_page_tables(struct kvm_sregs *sregs, uint8_t *mem)
     memset(pdpte, 0, 4096);
     memset(pde, 0, 4096);
 
-    *pml4 = BOOT_PDPTE | (X86_PDPT_P | X86_PDPT_RW);
-    *pdpte = BOOT_PDE | (X86_PDPT_P | X86_PDPT_RW);
+    *pml4 = BOOT_PDPTE | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_USR);
+    *pdpte = BOOT_PDE | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_USR);
     for (paddr = 0; paddr < GUEST_SIZE; paddr += GUEST_PAGE_SIZE, pde++)
-        *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS);
+        *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS | X86_PDPT_USR);
 
     sregs->cr3 = BOOT_PML4;
     sregs->cr4 |= X86_CR4_PAE;
