@@ -65,14 +65,10 @@ ENTRY(cpu_sse_enable)
     ret
 END(cpu_sse_enable)
 
-ENTRY(test_user_function)
-    jmp test_user_function
-    cli
-    hlt
-    jmp test_user_function
-END(test_user_function)
-
 ENTRY(_jump_usermode)
+     // save the return address for the final ret
+     popq %rdi
+
      cli
      movq $0x2b,%rax
      movq %rax, %fs 
@@ -89,6 +85,9 @@ ENTRY(_jump_usermode)
      pushq %rax
 
      pushq $0x23
-     pushq $test_user_function
+     pushq $out
      iretq
+
+out: pushq %rdi
+     ret
 END(_jump_usermode)

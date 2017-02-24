@@ -44,6 +44,8 @@ void _start(struct ukvm_boot_info *bi)
 
     _jump_usermode();
 
+    //for (;;);
+
     ret = solo5_app_main((char *)bi->cmdline);
     printf("Solo5: solo5_app_main() returned with %d\n", ret);
 

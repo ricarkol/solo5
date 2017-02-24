@@ -151,19 +151,19 @@ void tss_init(void)
 {
     extern uint64_t cpu_gdt64[];
     struct tss_desc *td = (void *)&cpu_gdt64[GDT_DESC_TSS_LO];
-
+/*
     cpu_tss.rsp[0] = 0x08;
     cpu_tss.rsp[1] = 0x08;
     cpu_tss.rsp[2] = 0x08;
-
+*/
     cpu_tss.ist[0] = (uint64_t)&cpu_intr_stack[sizeof cpu_intr_stack];
     cpu_tss.ist[1] = (uint64_t)&cpu_trap_stack[sizeof cpu_trap_stack];
     cpu_tss.ist[2] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
-    cpu_tss.ist[3] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
+/*    cpu_tss.ist[3] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
     cpu_tss.ist[4] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
     cpu_tss.ist[5] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
     cpu_tss.ist[6] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
-
+*/
     td->limit_lo = sizeof(cpu_tss) - 1;
     td->base_lo = (uint64_t)&cpu_tss;
     td->type = 0x9;
