@@ -180,9 +180,9 @@ static void tss_init(void)
 
 void intr_init(void)
 {
+    tss_init();
     idt_init();
     platform_intr_init();
-    tss_init();
 }
 
 struct trap_regs {

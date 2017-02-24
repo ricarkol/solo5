@@ -79,6 +79,8 @@ ENTRY(_jump_usermode)
 
      popq %rax
      xorq %rax, %rax
+     // set IOPL flags so usermode can do IO
+     orq $0x3000, %rax
      pushq %rax
 
      pushq $0x23
