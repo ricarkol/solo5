@@ -66,9 +66,6 @@ ENTRY(cpu_sse_enable)
 END(cpu_sse_enable)
 
 ENTRY(_jump_usermode)
-     // save the return address for the final ret
-     popq %rdi
-
      cli
      movq $0x2b,%rax
      movq %rax, %fs 
@@ -88,6 +85,7 @@ ENTRY(_jump_usermode)
      pushq $out
      iretq
 
-out: pushq %rdi
+out: // Point to the old ret address
+     addq $8, %rsp
      ret
 END(_jump_usermode)

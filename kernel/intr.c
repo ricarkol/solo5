@@ -147,7 +147,7 @@ static char cpu_intr_stack[4096]; /* IST1 */
 static char cpu_trap_stack[4096]; /* IST2 */
 static char cpu_nmi_stack[4096];  /* IST3 */
 
-void tss_init(void)
+static void tss_init(void)
 {
     extern uint64_t cpu_gdt64[];
     struct tss_desc *td = (void *)&cpu_gdt64[GDT_DESC_TSS_LO];
@@ -182,6 +182,7 @@ void intr_init(void)
 {
     idt_init();
     platform_intr_init();
+    tss_init();
 }
 
 struct trap_regs {
