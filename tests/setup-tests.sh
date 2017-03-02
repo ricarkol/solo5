@@ -30,10 +30,14 @@ fi
 
 case `uname -s` in
 Linux)
-    set -xe
+    #set -xe
     ip tuntap add tap100 mode tap
     ip addr add 10.0.0.1/24 dev tap100
     ip link set dev tap100 up
+
+    wget -nc https://github.com/mirage/ocaml-freestanding/archive/v0.2.1.tar.gz
+    tar xzvf v0.2.1.tar.gz
+    (cd ocaml-freestanding-0.2.1; make build/openlibm/libopenlibm.a; make build/nolibc/libnolibc.a)
     ;;
 FreeBSD)
     kldload vmm
@@ -41,6 +45,10 @@ FreeBSD)
     kldload nmdm
     sysctl -w net.link.tap.up_on_open=1
     ifconfig tap100 create 10.0.0.1/24 link0 up
+
+    wget -nc https://github.com/mirage/ocaml-freestanding/archive/v0.2.1.tar.gz
+    tar xzvf v0.2.1.tar.gz
+    (cd ocaml-freestanding-0.2.1; make build/openlibm/libopenlibm.a; make build/nolibc/libnolibc.a)
     ;;
 *)
     exit 1

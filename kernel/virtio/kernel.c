@@ -93,7 +93,7 @@ static void kernel_main2(void)
 
     intr_enable();
 
-    ret = solo5_app_main(cmdline);
+    ret = main(cmdline);
     printf("Solo5: solo5_app_main() returned with %d\n", ret);
 
     platform_exit();

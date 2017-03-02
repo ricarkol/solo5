@@ -352,7 +352,7 @@ out:
     }
 }
 
-int solo5_app_main(char *cmdline)
+int main(char *cmdline)
 {
     int verbose = 0;
     int limit = 0;

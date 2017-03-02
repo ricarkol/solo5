@@ -18,37 +18,10 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "solo5.h"
+#include "stdio.h"
 
-static size_t strlen(const char *s)
+int main(char *arg)
 {
-    size_t len = 0;
-
-    while (*s++)
-        len += 1;
-    return len;
-}
-
-static void puts(const char *s)
-{
-    solo5_console_write(s, strlen(s));
-}
-
-int main(char *cmdline)
-{
-    puts("\n**** Solo5 standalone test_hello ****\n\n");
-
-    /* "SUCCESS" will be passed in via the command line */
-    puts("Hello, World\nCommand line is: '");
-
-    size_t len = 0;
-    char *p = cmdline;
-
-    while (*p++)
-        len++;
-    solo5_console_write(cmdline, len);
-
-    puts("'\n");
-
+    printf("printf from ocaml freestanding %s\n", arg);
     return 0;
 }

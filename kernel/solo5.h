@@ -28,6 +28,7 @@
 
 /* Application entry point */
 int solo5_app_main(char *cmdline);
+int main(char *cmdline);
 
 /* Network */
 int solo5_net_write_sync(uint8_t *data, int n);

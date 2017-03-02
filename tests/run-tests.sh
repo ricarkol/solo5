@@ -224,6 +224,7 @@ MAKECONF=${SCRIPT_DIR}/../Makeconf
 TESTS=
 if [ -n "${BUILD_UKVM}" ]; then
     add_test test_hello.ukvm::SUCCESS
+    add_test test_nolibc.ukvm::SUCCESS
     add_test test_globals.ukvm
     add_test test_blk.ukvm:-d
     add_test test_ping_serve.ukvm:-n:limit

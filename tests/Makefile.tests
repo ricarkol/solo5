@@ -19,6 +19,37 @@
 TOP?=../..
 include $(TOP)/Makefile.common
 
+# doesn't work
+# OCAML_FREESTANDING_LIBS=/home/ricarkol/ocaml-freestanding/build/nolibc/libnolibc.a \
+# /home/ricarkol/ocaml-freestanding/build/openlibm/libopenlibm.a
+
+OCAML_FREESTANDING_DIR=../ocaml-freestanding-0.2.1
+
+
+OCAML_FREESTANDING_LIBS= \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/ctype.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/dtoa.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/memchr.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/memcmp.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/memcpy.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/memmove.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/memset.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/strcmp.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/strlen.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/strtol.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/strchr.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/strchrnul.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/strncpy.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/stpncpy.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/stubs.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/vfprintf.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/vsnprintf.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/snprintf.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/fprintf.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/printf.o \
+	${OCAML_FREESTANDING_DIR}/build/nolibc/sysdeps_solo5.o \
+	${OCAML_FREESTANDING_DIR}/build/openlibm/libopenlibm.a
+
 .PHONY: ukvm
 ukvm: $(UKVM_TARGETS)
 
@@ -29,6 +60,7 @@ SOLO5_DIR=$(TOP)/kernel
 UKVM_SRC=$(TOP)/ukvm
 
 CFLAGS+=-I$(SOLO5_DIR)
+CFLAGS+=-I${OCAML_FREESTANDING_DIR}/nolibc/include/
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -42,7 +74,11 @@ Makefile.ukvm: $(UKVM_SRC)/ukvm-configure
 
 %.ukvm: %.o $(SOLO5_DIR)/ukvm/solo5.lds $(SOLO5_DIR)/ukvm/solo5.o
 	$(LD) -T $(SOLO5_DIR)/ukvm/solo5.lds \
-			 $(LDFLAGS) -o $@ $(SOLO5_DIR)/ukvm/solo5.o $< $(LDLIBS)
+			$(LDFLAGS) \
+			-o $@ \
+			$(OCAML_FREESTANDING_LIBS) \
+			$(SOLO5_DIR)/ukvm/solo5.o \
+			$< $(LDLIBS)
 
 $(SOLO5_DIR)/ukvm/solo5.o: 
 	$(MAKE) -C $(SOLO5_DIR) ukvm
@@ -50,7 +86,12 @@ endif
 
 %.virtio: %.o $(SOLO5_DIR)/virtio/solo5.lds $(SOLO5_DIR)/virtio/solo5.o
 	$(LD) -T $(SOLO5_DIR)/virtio/solo5.lds \
-			 $(LDFLAGS) -o $@ $(SOLO5_DIR)/virtio/solo5.o $< $(LDLIBS)
+			$(LDFLAGS) \
+			-o $@ \
+			$(OCAML_FREESTANDING_LIBS) \
+			$(SOLO5_DIR)/virtio/solo5.o \
+			$< $(LDLIBS)
+			# $(LDFLAGS) -o $@ $(SOLO5_DIR)/virtio/solo5.o $< $(LDLIBS)
 
 $(SOLO5_DIR)/virtio/solo5.o: 
 	$(MAKE) -C $(SOLO5_DIR) virtio
