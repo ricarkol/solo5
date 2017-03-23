@@ -49,8 +49,8 @@ static void idt_fillgate(unsigned num, void *fun, unsigned ist)
     /*
      * All gates are interrupt gates, all handlers run with interrupts off.
      */
-    desc->offset_hi = (uint64_t)fun >> 16;
-    desc->offset_lo = (uint64_t)fun & 0xffff;
+    desc->offset_hi = (uint32_t)fun >> 16;
+    desc->offset_lo = (uint32_t)fun & 0xffff;
     desc->selector = GDT_DESC_OFFSET(GDT_DESC_CODE);
     desc->ist = ist;
     desc->type = 0b1110;
@@ -111,8 +111,8 @@ static void idt_init(void)
     struct idtptr idtptr;
 
     idtptr.limit = sizeof(cpu_idt) - 1;
-    idtptr.base = (uint64_t) &cpu_idt;
-    cpu_idt_load((uint64_t) &idtptr);
+    idtptr.base = (uint32_t) &cpu_idt;
+    cpu_idt_load((uint32_t) &idtptr);
 }
 
 struct tss {
@@ -151,17 +151,17 @@ static void tss_init(void)
     extern uint64_t cpu_gdt64[];
     struct tss_desc *td = (void *)&cpu_gdt64[GDT_DESC_TSS_LO];
 
-    cpu_tss.ist[0] = (uint64_t)&cpu_intr_stack[sizeof cpu_intr_stack];
-    cpu_tss.ist[1] = (uint64_t)&cpu_trap_stack[sizeof cpu_trap_stack];
-    cpu_tss.ist[2] = (uint64_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
+    cpu_tss.ist[0] = (uint32_t)&cpu_intr_stack[sizeof cpu_intr_stack];
+    cpu_tss.ist[1] = (uint32_t)&cpu_trap_stack[sizeof cpu_trap_stack];
+    cpu_tss.ist[2] = (uint32_t)&cpu_nmi_stack[sizeof cpu_nmi_stack];
     td->limit_lo = sizeof(cpu_tss);
-    td->base_lo = (uint64_t)&cpu_tss;
+    td->base_lo = (uint32_t)&cpu_tss;
     td->type = 0x9;
     td->dpl = 0;
     td->p = 1;
     td->limit_hi = 0;
     td->gran = 0;
-    td->base_hi = (uint64_t)&cpu_tss >> 24;
+    td->base_hi = (uint32_t)&cpu_tss >> 24;
     td->zero = 0;
 
     cpu_tss_load(GDT_DESC_TSS_LO*8);

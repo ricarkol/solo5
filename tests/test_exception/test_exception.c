@@ -30,8 +30,6 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
 {
     puts("\n**** Solo5 standalone test_exception ****\n\n");
 
-    uint64_t addr_invalid = 2ULL << 33;
-    *(uint8_t *)addr_invalid = 1;
 
     return 0;
 }

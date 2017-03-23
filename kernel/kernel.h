@@ -185,6 +185,7 @@ static inline uint64_t inq(uint16_t port_lo)
     return ((uint64_t)lo) | ((uint64_t)hi << 32);
 }
 
+#if 0
 static inline uint64_t mul64_32(uint64_t a, uint32_t b)
 {
     uint64_t prod;
@@ -198,6 +199,7 @@ static inline uint64_t mul64_32(uint64_t a, uint32_t b)
 
     return prod;
 }
+#endif
 
 /* compiler-only memory "barrier" */
 #define cc_barrier() __asm__ __volatile__("" : : : "memory")

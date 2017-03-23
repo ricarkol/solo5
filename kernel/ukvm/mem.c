@@ -57,8 +57,8 @@ void mem_init(uint64_t size, uint64_t kernel_end)
  */
 void *sbrk(intptr_t increment)
 {
-    uint64_t prev, brk;
-    uint64_t heap_max = (uint64_t)&prev - STACK_GUARD_SIZE;
+    uint32_t prev, brk;
+    uint32_t heap_max = (uint32_t)&prev - STACK_GUARD_SIZE;
     prev = brk = heap_top;
 
     /*

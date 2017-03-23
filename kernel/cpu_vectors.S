@@ -19,27 +19,27 @@
  */
 
 .macro PUSH_CALLER_SAVE
-    pushq %rax
-    pushq %rdi
-    pushq %rsi
-    pushq %rdx
-    pushq %rcx
-    pushq %r8
-    pushq %r9
-    pushq %r10
-    pushq %r11
+    pushl %eax
+    pushl %edi
+    pushl %esi
+    pushl %edx
+    pushl %ecx
+    /*pushl %r8
+    pushl %r9
+    pushl %r10
+    pushl %r11*/
 .endm
 
 .macro POP_CALLER_SAVE
-    popq %r11
-    popq %r10
-    popq %r9
-    popq %r8
-    popq %rcx
-    popq %rdx
-    popq %rsi
-    popq %rdi
-    popq %rax
+    /*popl %r11
+    popl %r10
+    popl %r9
+    popl %r8*/
+    popl %ecx
+    popl %edx
+    popl %esi
+    popl %edi
+    popl %eax
 .endm
 
 .macro TRAP_ENTRY trapno, has_ec
@@ -49,23 +49,23 @@ cpu_trap_\trapno:
     cld
 
 .if \has_ec
-    movq %cr2, %rdi                     /* for #PF */
-    pushq %rdi
+    movl %cr2, %edi                     /* for #PF */
+    pushl %edi
 .else
-    pushq $0                            /* no error code or %cr2, pass 0 */
-    pushq $0
+    pushl $0                            /* no error code or %cr2, pass 0 */
+    pushl $0
 .endif
     PUSH_CALLER_SAVE
 
-    movq $\trapno, %rdi
-    movq %rsp, %rsi
-    addq $72, %rsi                      /* struct trap_regs is at %rsp + 72 */
+    movl $\trapno, %edi
+    movl %esp, %esi
+    addl $72, %esi                      /* struct trap_regs is at %esp + 72 */
     call trap_handler
 
     POP_CALLER_SAVE
-    addq $16, %rsp                      /* discard error code and %cr2 */
+    addl $16, %esp                      /* discard error code and %cr2 */
 
-    iretq
+    iret
 .endm
     
 .macro IRQ_ENTRY irqno
@@ -76,12 +76,12 @@ cpu_irq_\irqno:
 
     PUSH_CALLER_SAVE
 
-    movq $\irqno, %rdi
+    movl $\irqno, %edi
     call irq_handler
 
     POP_CALLER_SAVE
 
-    iretq
+    iret
 .endm
 
 TRAP_ENTRY 0,  0 /* #DE */

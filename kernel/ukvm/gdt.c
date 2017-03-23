@@ -46,7 +46,7 @@ void gdt_init(void)
 
     /* initialize GDT "pointer" */
     gdtptr.limit = sizeof(cpu_gdt64) - 1;
-    gdtptr.base = (uint64_t)&cpu_gdt64;
+    gdtptr.base = (uint32_t)&cpu_gdt64;
 
     /* clear structures */
     memset(cpu_gdt64, 0, sizeof(cpu_gdt64));
@@ -54,5 +54,5 @@ void gdt_init(void)
     cpu_gdt64[GDT_DESC_CODE] = GDT_DESC_CODE_VAL;
     cpu_gdt64[GDT_DESC_DATA] = GDT_DESC_DATA_VAL;
 
-    cpu_gdt_load((uint64_t)&gdtptr);
+    cpu_gdt_load((uint32_t)&gdtptr);
 }

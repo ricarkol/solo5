@@ -55,7 +55,37 @@ static inline void ukvm_do_hypercall(int n, volatile void *arg)
 #    endif
 
 #else
-#    error Unsupported architecture
+
+/*
+ * PIO base address used to dispatch hypercalls.
+ */
+#define UKVM_HYPERCALL_PIO_BASE 0x500
+
+#    ifdef __UKVM_HOST__
+/*
+ * Non-dereferencable monitor-side type representing a guest physical address.
+ */
+typedef uint32_t ukvm_gpa_t;
+#    else
+/*
+ * On x86, 32-bit PIO is used as the hypercall mechanism. This only supports
+ * sending 32-bit pointers; raise an assertion if a bigger pointer is used.
+ *
+ * On x86 the compiler-only memory barrier ("memory" clobber) is sufficient
+ * across the hypercall boundary.
+ */
+static inline void ukvm_do_hypercall(int n, volatile void *arg)
+{
+    assert(((uint32_t)arg <= UINT32_MAX));
+    __asm__ __volatile__("outl %0, %1"
+            :
+            : "a" ((uint32_t)((uint32_t)arg)),
+              "d" ((uint16_t)(UKVM_HYPERCALL_PIO_BASE + n))
+            : "memory");
+}
+#    endif
+
+
 #endif
 
 /*

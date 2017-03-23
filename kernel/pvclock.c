@@ -95,6 +95,8 @@ x86_cpuid(uint32_t level, uint32_t *eax_out, uint32_t *ebx_out,
 }
 
 uint64_t pvclock_monotonic(void) {
+    return 0;
+#if 0
     uint32_t version;
     uint64_t delta, time_now;
 
@@ -112,11 +114,13 @@ uint64_t pvclock_monotonic(void) {
     } while ((pvclock_ti.version & 1) || (pvclock_ti.version != version));
 
     return time_now;
+#endif
 }
 
 /*
  * Read wall time offset since system boot using PV clock.
  */
+#if 0
 static uint64_t pvclock_read_wall_clock(void)
 {
 	uint32_t version;
@@ -132,11 +136,15 @@ static uint64_t pvclock_read_wall_clock(void)
 
 	return wc_boot;
 }
+#endif
 
 int pvclock_init(void) {
+
+    return 1;
+
+#if 0
     uint32_t eax, ebx, ecx, edx;
     uint32_t msr_kvm_system_time, msr_kvm_wall_clock;
-
     /*
      * Prefer new-style MSRs, and bail entirely if neither is indicated as
      * available by CPUID.
@@ -170,6 +178,7 @@ int pvclock_init(void) {
     wc_epochoffset = pvclock_read_wall_clock();
 
     return 0;
+#endif
 }
 
 /*

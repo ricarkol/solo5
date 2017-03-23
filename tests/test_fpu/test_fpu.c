@@ -32,6 +32,7 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
 
     puts("\n**** Solo5 standalone test_fpu ****\n\n");
 
+/*
     c[0] = 2.0;
     c[1] = 5.0;
      __asm__ (
@@ -42,7 +43,7 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
          : "m" (c)
          : "xmm1"
     );
-
+*/
     a = 1.5;
     b = 5.0;
     a *= b;
