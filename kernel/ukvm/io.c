@@ -25,7 +25,7 @@ int solo5_net_write_sync(uint8_t *data, int n)
 {
     volatile struct ukvm_netwrite wr;
 
-    wr.data = data;
+    wr.data = (uint32_t) data;
     wr.len = n;
     wr.ret = 0;
 
@@ -38,7 +38,7 @@ int solo5_net_read_sync(uint8_t *data, int *n)
 {
     volatile struct ukvm_netread rd;
 
-    rd.data = data;
+    rd.data = (uint32_t) data;
     rd.len = *n;
     rd.ret = 0;
 
@@ -65,7 +65,7 @@ int solo5_blk_write_sync(uint64_t sec, uint8_t *data, int n)
     volatile struct ukvm_blkwrite wr;
 
     wr.sector = sec;
-    wr.data = data;
+    wr.data = (uint32_t) data;
     wr.len = n;
     wr.ret = 0;
 
@@ -79,7 +79,7 @@ int solo5_blk_read_sync(uint64_t sec, uint8_t *data, int *n)
     volatile struct ukvm_blkread rd;
 
     rd.sector = sec;
-    rd.data = data;
+    rd.data = (uint32_t) data;
     rd.len = *n;
     rd.ret = 0;
 

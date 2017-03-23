@@ -50,21 +50,6 @@ void ukvm_x86_setup_pagetables(uint8_t *mem, size_t mem_size)
         *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS);
 }
 
-/*
-static struct x86_gdt_desc seg_to_desc(const struct x86_seg *seg)
-{
-    struct x86_gdt_desc desc = {
-        .base_lo = seg->base & 0xffffff,
-        .base_hi = (seg->base & 0xff000000) >> 24,
-        .limit_lo = seg->limit & 0xffff,
-        .limit_hi = (seg->limit & 0xf0000) >> 16,
-        .type = seg->type, .s = seg->s, .dpl = seg->dpl, .p = seg->p,
-        .avl = seg->avl,. l = seg->l, .db = seg->db, .g = seg->g
-    };
-    return desc;
-}
-*/
-
 /* Setup a descriptor in the Global Descriptor Table */
 void gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran, uint8_t *mem)
 {
@@ -89,8 +74,6 @@ void ukvm_x86_setup_gdt(uint8_t *mem)
     gdt_set_gate(X86_GDT_NULL, 0, 0, 0, 0, mem);
     gdt_set_gate(X86_GDT_CODE, 0, 0xFFFFFFFF, 0x9A, 0xCF, mem);
     gdt_set_gate(X86_GDT_DATA, 0, 0xFFFFFFFF, 0x92, 0xCF, mem);
-    gdt_set_gate(X86_GDT_TSS_LO, 0, 0, 0, 0, mem);
-    gdt_set_gate(X86_GDT_TSS_HI, 0, 0, 0, 0, mem);
 }
 
 

@@ -50,21 +50,6 @@ static void setup_cpuid(struct ukvm_hvb *hvb)
         err(1, "KVM: ioctl (SET_CPUID2) failed");
 }
 
-/*
-static struct kvm_segment seg_to_kvm(const struct x86_seg *seg,
-        unsigned index)
-{
-    struct kvm_segment kvm = {
-        .selector = index * 8,
-        .base = seg->base & 0xffffffff,
-        .limit = seg->limit & 0xfffff,
-        .type = seg->type, .present = seg->p, .dpl = seg->dpl, .db = seg->db,
-        .s = seg->s, .l = seg->l, .g = seg->g, .avl = seg->avl
-    };
-    return kvm;
-}
-*/
-
 void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
         ukvm_gpa_t gpa_kend, char **cmdline)
 {
@@ -89,18 +74,17 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     sregs.es = data_seg;
     sregs.fs = data_seg;
     sregs.gs = data_seg;
-    sregs.ss = data_seg;
 
     sregs.gdt.base = X86_GDT_BASE;
     sregs.gdt.limit = X86_GDTR_LIMIT;
 
     // just set protected mode
-    sregs.cr0 = X86_CR0_PE;
+    sregs.cr0 |= X86_CR0_PE;
 
     ret = ioctl(hvb->vcpufd, KVM_SET_SREGS, &sregs);
     if (ret == -1)
         err(1, "KVM: ioctl (SET_SREGS) failed");
-   
+
     struct ukvm_boot_info *bi =
         (struct ukvm_boot_info *)(hv->mem + X86_BOOT_INFO_BASE);
     bi->mem_size = hv->mem_size;
@@ -111,6 +95,7 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
      * Initialize user registers using (Linux) x86_64 ABI convention.
      */
     struct kvm_regs regs = {
+        //.rip = 0x100220, //gpa_ep,
         .rip = gpa_ep,
         .rflags = X86_INIT_RFLAGS,
         .rsp = hv->mem_size - 8, /* x86_64 ABI requires ((rsp + 8) % 16) == 0 */

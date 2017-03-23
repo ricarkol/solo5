@@ -77,16 +77,6 @@
 #define X86_PDPT_PS_BIT         7 /* Page size */
 #define X86_PDPT_PS             _BITUL(X86_PDPT_PS_BIT)
 
-/*
- * Abstract x86 segment descriptor.
- */
-struct x86_seg {
-    uint64_t base;
-    uint32_t limit;
-    uint8_t type;
-    uint8_t p, dpl, db, s, l, g, avl;
-};
-
 
 #define GDT_DESC_OFFSET(n) ((n) * 0x8)
 
@@ -142,37 +132,7 @@ struct _kvm_segment {
         seg.g = GDT_GET_G(gdt_ent);             \
         seg.avl = GDT_GET_AVL(gdt_ent);         \
     } while (0)
-
-static const struct x86_seg ukvm_x86_seg_code = {
-    .base = 0,
-    .limit = 0xfffff,
-    .type = 8, .p = 1, .dpl = 0, .db = 0, .s = 1, .l = 0, .g = 1
-};
-
-static const struct x86_seg ukvm_x86_seg_data = {
-    .base = 0,
-    .limit = 0xfffff,
-    .type = 2, .p = 1, .dpl = 0, .db = 1, .s = 1, .l = 0, .g = 1
-};
  
-/*
- * x86 segment descriptor as seen by the CPU in the GDT.
- */
-struct x86_gdt_desc {
-    uint64_t limit_lo:16;
-    uint64_t base_lo:24;
-    uint64_t type:4;
-    uint64_t s:1;
-    uint64_t dpl:2;
-    uint64_t p:1;
-    uint64_t limit_hi:4;
-    uint64_t avl:1;
-    uint64_t l:1;
-    uint64_t db:1;
-    uint64_t g:1;
-    uint64_t base_hi:8;
-} __attribute__((packed));
-
 struct gdt_entry
 {
     unsigned short limit_low;
@@ -195,12 +155,10 @@ enum x86_gdt_selector {
     X86_GDT_NULL,
     X86_GDT_CODE,
     X86_GDT_DATA,
-    X86_GDT_TSS_LO,
-    X86_GDT_TSS_HI,
     X86_GDT_MAX
 };
 
-#define X86_GDTR_LIMIT ((sizeof (struct x86_gdt_desc) * X86_GDT_MAX) - 1)
+#define X86_GDTR_LIMIT ((sizeof (struct gdt_entry) * X86_GDT_MAX) - 1)
 
 /*
  * Monitor memory map for x86 CPUs:

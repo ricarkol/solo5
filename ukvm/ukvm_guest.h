@@ -108,9 +108,9 @@ static inline void ukvm_do_hypercall(int n, volatile void *arg)
  * the guest entrypoint.
  */
 struct ukvm_boot_info {
-    uint64_t mem_size;                  /* Memory size in bytes */
-    uint64_t kernel_end;                /* Address of end of kernel */
-    UKVM_GUEST_PTR(char *) cmdline;     /* Address of command line (C string) */
+    uint32_t mem_size;                  /* Memory size in bytes */
+    uint32_t kernel_end;                /* Address of end of kernel */
+    uint32_t cmdline;     /* Address of command line (C string) */
 };
 /*
  * Maximum size of guest command line, including the string terminator.
@@ -143,24 +143,24 @@ struct ukvm_puts {
     /* IN */
     //UKVM_GUEST_PTR(const char *) data;
     uint32_t data;
-    //size_t len;
+    //uint32_t len;
     uint32_t len;
 };
 
 /* UKVM_HYPERCALL_BLKINFO */
 struct ukvm_blkinfo {
     /* OUT */
-    size_t sector_size;
-    size_t num_sectors;
+    uint32_t sector_size;
+    uint32_t num_sectors;
     int rw;
 };
 
 /* UKVM_HYPERCALL_BLKWRITE */
 struct ukvm_blkwrite {
     /* IN */
-    size_t sector;
-    UKVM_GUEST_PTR(const void *) data;
-    size_t len;
+    uint32_t sector;
+    uint32_t data;
+    uint32_t len;
 
     /* OUT */
     int ret;
@@ -169,11 +169,11 @@ struct ukvm_blkwrite {
 /* UKVM_HYPERCALL_BLKREAD */
 struct ukvm_blkread {
     /* IN */
-    size_t sector;
-    UKVM_GUEST_PTR(void *) data;
+    uint32_t sector;
+    uint32_t data;
 
     /* IN/OUT */
-    size_t len;
+    uint32_t len;
 
     /* OUT */
     int ret;
@@ -188,8 +188,8 @@ struct ukvm_netinfo {
 /* UKVM_HYPERCALL_NETWRITE */
 struct ukvm_netwrite {
     /* IN */
-    UKVM_GUEST_PTR(const void *) data;
-    size_t len;
+    uint32_t data;
+    uint32_t len;
 
     /* OUT */
     int ret;
@@ -198,10 +198,10 @@ struct ukvm_netwrite {
 /* UKVM_HYPERCALL_NETREAD */
 struct ukvm_netread {
     /* IN */
-    UKVM_GUEST_PTR(void *) data;
+    uint32_t data;
 
     /* IN/OUT */
-    size_t len;
+    uint32_t len;
 
     /* OUT */
     int ret;

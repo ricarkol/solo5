@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "ukvm.h"
 
@@ -103,8 +104,10 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         goto out_error;
 
     numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf32_Ehdr), 0);
-    if (numb < 0)
+    if (numb < 0) {
+        printf("read\n");
         goto out_error;
+    }
     if (numb != sizeof(Elf32_Ehdr))
         goto out_invalid;
 
@@ -130,11 +133,15 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     buflen = ph_entsz * ph_cnt;
 
     phdr = malloc(buflen);
-    if (!phdr)
+    if (!phdr) {
+        printf("malloc\n");
         goto out_error;
+    }
     numb = pread_in_full(fd_kernel, phdr, buflen, ph_off);
-    if (numb < 0)
+    if (numb < 0) {
+        printf("pread_in_full(fd_kernel, phdr, buflen, ph_off);");
         goto out_error;
+    }
     if (numb != buflen)
         goto out_invalid;
 
@@ -179,17 +186,14 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
 
         daddr = mem + paddr;
         numb = pread_in_full(fd_kernel, daddr, filesz, offset);
-        if (numb < 0)
+        if (numb < 0) {
+            printf(" pread_in_full(fd_kernel, daddr, filesz, offset);");
             goto out_error;
+        }
         if (numb != filesz)
             goto out_invalid;
         memset(daddr + filesz, 0, memsz - filesz);
 
-        /* Write-protect the executable segment */
-        if (phdr[ph_i].p_flags & PF_X) {
-            if (mprotect(daddr, _end - paddr, PROT_EXEC | PROT_READ) == -1)
-                goto out_error;
-        }
     }
 
     free (phdr);
