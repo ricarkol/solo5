@@ -27,19 +27,10 @@
 
 void ukvm_x86_setup_pagetables(uint8_t *mem, size_t mem_size)
 {
-//#define in32 1
-
-#ifdef in32
-    uint32_t *pml4 = (uint32_t *)(mem + X86_PML4_BASE);
-    uint32_t *pdpte = (uint32_t *)(mem + X86_PDPTE_BASE);
-    uint32_t *pde = (uint32_t *)(mem + X86_PDE_BASE);
-    uint32_t paddr;
-#else
     uint64_t *pml4 = (uint64_t *)(mem + X86_PML4_BASE);
     uint64_t *pdpte = (uint64_t *)(mem + X86_PDPTE_BASE);
     uint64_t *pde = (uint64_t *)(mem + X86_PDE_BASE);
     uint64_t paddr;
-#endif
 
     /*
      * For simplicity we currently use 2MB pages and only a single
@@ -59,6 +50,7 @@ void ukvm_x86_setup_pagetables(uint8_t *mem, size_t mem_size)
         *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS);
 }
 
+/*
 static struct x86_gdt_desc seg_to_desc(const struct x86_seg *seg)
 {
     struct x86_gdt_desc desc = {
@@ -71,15 +63,34 @@ static struct x86_gdt_desc seg_to_desc(const struct x86_seg *seg)
     };
     return desc;
 }
+*/
+
+/* Setup a descriptor in the Global Descriptor Table */
+void gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran, uint8_t *mem)
+{
+    struct gdt_entry *gdt = (struct gdt_entry *)(mem + X86_GDT_BASE);
+
+    /* Setup the descriptor base address */
+    gdt[num].base_low = (base & 0xFFFF);
+    gdt[num].base_middle = (base >> 16) & 0xFF;
+    gdt[num].base_high = (base >> 24) & 0xFF;
+
+    /* Setup the descriptor limits */
+    gdt[num].limit_low = (limit & 0xFFFF);
+    gdt[num].granularity = ((limit >> 16) & 0x0F);
+
+    /* Finally, set up the granularity and access flags */
+    gdt[num].granularity |= (gran & 0xF0);
+    gdt[num].access = access;
+}
 
 void ukvm_x86_setup_gdt(uint8_t *mem)
 {
-    struct x86_gdt_desc *gdt = (struct x86_gdt_desc *)(mem + X86_GDT_BASE);
-    struct x86_gdt_desc null = { 0 };
-
-    gdt[X86_GDT_NULL] = null;
-    gdt[X86_GDT_CODE] = seg_to_desc(&ukvm_x86_seg_code);
-    gdt[X86_GDT_DATA] = seg_to_desc(&ukvm_x86_seg_data);
-    gdt[X86_GDT_TSS_LO] = null;
-    gdt[X86_GDT_TSS_HI] = null;
+    gdt_set_gate(X86_GDT_NULL, 0, 0, 0, 0, mem);
+    gdt_set_gate(X86_GDT_CODE, 0, 0xFFFFFFFF, 0x9A, 0xCF, mem);
+    gdt_set_gate(X86_GDT_DATA, 0, 0xFFFFFFFF, 0x92, 0xCF, mem);
+    gdt_set_gate(X86_GDT_TSS_LO, 0, 0, 0, 0, mem);
+    gdt_set_gate(X86_GDT_TSS_HI, 0, 0, 0, 0, mem);
 }
+
+

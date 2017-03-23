@@ -50,18 +50,20 @@ static void setup_cpuid(struct ukvm_hvb *hvb)
         err(1, "KVM: ioctl (SET_CPUID2) failed");
 }
 
+/*
 static struct kvm_segment seg_to_kvm(const struct x86_seg *seg,
         unsigned index)
 {
     struct kvm_segment kvm = {
         .selector = index * 8,
         .base = seg->base & 0xffffffff,
-        .limit = seg->limit & 0xffff,
+        .limit = seg->limit & 0xfffff,
         .type = seg->type, .present = seg->p, .dpl = seg->dpl, .db = seg->db,
         .s = seg->s, .l = seg->l, .g = seg->g, .avl = seg->avl
     };
     return kvm;
 }
+*/
 
 void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
         ukvm_gpa_t gpa_kend, char **cmdline)
@@ -69,30 +71,31 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     struct ukvm_hvb *hvb = hv->b;
     struct kvm_sregs sregs;
     int ret;
+    struct kvm_segment data_seg, code_seg;
+    uint64_t *gdt = (uint64_t *) (hv->mem + X86_GDT_BASE);
 
     ukvm_x86_setup_gdt(hv->mem);
-    ukvm_x86_setup_pagetables(hv->mem, hv->mem_size);
 
     setup_cpuid(hvb);
 
     ret = ioctl(hvb->vcpufd, KVM_GET_SREGS, &sregs);
     if (ret == -1)
         err(1, "KVM: ioctl (GET_SREGS) failed");
-    
-    sregs.cs = seg_to_kvm(&ukvm_x86_seg_code, X86_GDT_CODE);
-    sregs.ds = seg_to_kvm(&ukvm_x86_seg_data, X86_GDT_DATA);
-    sregs.es = sregs.ds;
-    sregs.fs = sregs.ds;
-    sregs.gs = sregs.ds;
-    sregs.ss = sregs.ds;
+
+    GDT_TO_KVM_SEGMENT(code_seg, gdt, X86_GDT_CODE);
+    GDT_TO_KVM_SEGMENT(data_seg, gdt, X86_GDT_DATA);;
+    sregs.cs = code_seg;
+    sregs.ds = data_seg;
+    sregs.es = data_seg;
+    sregs.fs = data_seg;
+    sregs.gs = data_seg;
+    sregs.ss = data_seg;
+
     sregs.gdt.base = X86_GDT_BASE;
     sregs.gdt.limit = X86_GDTR_LIMIT;
 
-    sregs.efer |= X86_INIT_EFER_SET;
-    sregs.cr0 &= ~X86_INIT_CR0_CLEAR;
-    sregs.cr0 |= X86_INIT_CR0_SET;
-    sregs.cr3 = X86_INIT_CR3;
-    sregs.cr4 |= X86_INIT_CR4_SET;
+    // just set protected mode
+    sregs.cr0 = X86_CR0_PE;
 
     ret = ioctl(hvb->vcpufd, KVM_SET_SREGS, &sregs);
     if (ret == -1)
