@@ -46,7 +46,7 @@ UKVM_MODULE_CFLAGS=$(echo ${UKVM_MODULE_CFLAGS} | tr '[a-z]' '[A-Z]')
 
 TARGET=$(${UKVM_CC} -dumpmachine)
 echo *******************
-echo $TARGET
+echo $TARGET 1>&2
 echo *******************
 case ${TARGET} in
     x86_64-*linux*)

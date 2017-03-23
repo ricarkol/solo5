@@ -20,9 +20,19 @@
 
 #include "kernel.h"
 
+int ble = 1;
+
+void bla()
+{
+    if (ble == 1)
+        while (1);
+}
+
 void _start(struct ukvm_boot_info *bi)
 {
     int ret;
+
+    bla();
 
     printf("            |      ___|\n");
     printf("  __|  _ \\  |  _ \\ __ \\\n");

@@ -86,12 +86,12 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     int fd_kernel;
     ssize_t numb;
     size_t buflen;
-    Elf64_Off ph_off;
-    Elf64_Half ph_entsz;
-    Elf64_Half ph_cnt;
-    Elf64_Half ph_i;
-    Elf64_Phdr *phdr = NULL;
-    Elf64_Ehdr hdr;
+    Elf32_Off ph_off;
+    Elf32_Half ph_entsz;
+    Elf32_Half ph_cnt;
+    Elf32_Half ph_i;
+    Elf32_Phdr *phdr = NULL;
+    Elf32_Ehdr hdr;
 
     /* elf entry point (on physical memory) */
     *p_entry = 0;
@@ -102,10 +102,10 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     if (fd_kernel == -1)
         goto out_error;
 
-    numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf64_Ehdr), 0);
+    numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf32_Ehdr), 0);
     if (numb < 0)
         goto out_error;
-    if (numb != sizeof(Elf64_Ehdr))
+    if (numb != sizeof(Elf32_Ehdr))
         goto out_invalid;
 
     /*
@@ -119,9 +119,9 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
             || hdr.e_ident[EI_MAG1] != ELFMAG1
             || hdr.e_ident[EI_MAG2] != ELFMAG2
             || hdr.e_ident[EI_MAG3] != ELFMAG3
-            || hdr.e_ident[EI_CLASS] != ELFCLASS64
+            /*|| hdr.e_ident[EI_CLASS] != ELFCLASS64*/
             || hdr.e_type != ET_EXEC
-            || hdr.e_machine != EM_X86_64)
+            /*|| hdr.e_machine != EM_X86_64*/)
         goto out_invalid;
 
     ph_off = hdr.e_phoff;
@@ -195,6 +195,7 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     free (phdr);
     close (fd_kernel);
     *p_entry = hdr.e_entry;
+
     return;
 
 out_error:
