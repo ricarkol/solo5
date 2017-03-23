@@ -56,7 +56,7 @@ static struct kvm_segment seg_to_kvm(const struct x86_seg *seg,
     struct kvm_segment kvm = {
         .selector = index * 8,
         .base = seg->base & 0xffffffff,
-        .limit = seg->limit & 0xfffff,
+        .limit = seg->limit & 0xffff,
         .type = seg->type, .present = seg->p, .dpl = seg->dpl, .db = seg->db,
         .s = seg->s, .l = seg->l, .g = seg->g, .avl = seg->avl
     };

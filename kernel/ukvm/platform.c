@@ -32,7 +32,7 @@ int platform_puts(const char *buf, int n)
 {
     struct ukvm_puts str;
 
-    str.data = (char *)buf;
+    str.data = (uint32_t)buf;
     str.len = n;
 
     ukvm_do_hypercall(UKVM_HYPERCALL_PUTS, &str);

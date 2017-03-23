@@ -141,8 +141,10 @@ enum ukvm_hypercall {
 /* UKVM_HYPERCALL_PUTS */
 struct ukvm_puts {
     /* IN */
-    UKVM_GUEST_PTR(const char *) data;
-    size_t len;
+    //UKVM_GUEST_PTR(const char *) data;
+    uint32_t data;
+    //size_t len;
+    uint32_t len;
 };
 
 /* UKVM_HYPERCALL_BLKINFO */

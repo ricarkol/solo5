@@ -32,6 +32,8 @@ void _start(struct ukvm_boot_info *bi)
 {
     int ret;
 
+        while (1);
+
     bla();
 
     printf("            |      ___|\n");

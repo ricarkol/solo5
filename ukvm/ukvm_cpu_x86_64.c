@@ -27,10 +27,19 @@
 
 void ukvm_x86_setup_pagetables(uint8_t *mem, size_t mem_size)
 {
+//#define in32 1
+
+#ifdef in32
+    uint32_t *pml4 = (uint32_t *)(mem + X86_PML4_BASE);
+    uint32_t *pdpte = (uint32_t *)(mem + X86_PDPTE_BASE);
+    uint32_t *pde = (uint32_t *)(mem + X86_PDE_BASE);
+    uint32_t paddr;
+#else
     uint64_t *pml4 = (uint64_t *)(mem + X86_PML4_BASE);
     uint64_t *pdpte = (uint64_t *)(mem + X86_PDPTE_BASE);
     uint64_t *pde = (uint64_t *)(mem + X86_PDE_BASE);
     uint64_t paddr;
+#endif
 
     /*
      * For simplicity we currently use 2MB pages and only a single
