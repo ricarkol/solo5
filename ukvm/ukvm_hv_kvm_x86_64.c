@@ -81,11 +81,9 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
 
     sregs.cs.base = 0;
     sregs.cs.selector = 0;
-    sregs.ds.base = 0;
-    sregs.ds.selector = 0;
 
     // just set protected mode
-    //sregs.cr0 |= X86_CR0_PE;
+    sregs.cr0 |= X86_CR0_PE;
 
     ret = ioctl(hvb->vcpufd, KVM_SET_SREGS, &sregs);
     if (ret == -1)

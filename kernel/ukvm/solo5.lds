@@ -15,7 +15,6 @@ SECTIONS {
     . = ALIGN(0x1000);
     _etext = .;
 
-    /* Read-only data */
     .rodata :
     {
         *(.rodata)
