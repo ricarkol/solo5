@@ -71,9 +71,6 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     GDT_TO_KVM_SEGMENT(code_seg, gdt, X86_GDT_CODE);
     GDT_TO_KVM_SEGMENT(data_seg, gdt, X86_GDT_DATA);
 
-    code_seg.limit = 0xffffffff;
-    data_seg.limit = 0xffffffff;
-
     sregs.cs = code_seg;
     sregs.ds = data_seg;
     sregs.es = data_seg;
@@ -116,8 +113,8 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
         .rflags = X86_INIT_RFLAGS,
         .rsp = hv->mem_size - 8, /* x86_64 ABI requires ((rsp + 8) % 16) == 0 */
         .rdi = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
-        //.rcx = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
-        //.rax = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
+        .rcx = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
+        .rax = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
     };
     ret = ioctl(hvb->vcpufd, KVM_SET_REGS, &regs);
     if (ret == -1)

@@ -80,23 +80,6 @@
 
 #define GDT_DESC_OFFSET(n) ((n) * 0x8)
 
-#define GDT_GET_BASE(x) (                      \
-    (((x) & 0xFF00000000000000) >> 32) |       \
-    (((x) & 0x000000FF00000000) >> 16) |       \
-    (((x) & 0x00000000FFFF0000) >> 16))
-
-#define GDT_GET_LIMIT(x) (uint32_t)(                                      \
-                                 (((x) & 0x000F000000000000) >> 32) |  \
-                                 (((x) & 0x000000000000FFFF)))
-
-/* Constructor for a conventional segment GDT (or LDT) entry */
-/* This is a macro so it can be used in initializers */
-#define GDT_ENTRY(flags, base, limit)               \
-    ((((base)  & _AC(0xff000000, ULL)) << (56-24)) | \
-     (((flags) & _AC(0x0000f0ff, ULL)) << 40) |      \
-     (((limit) & _AC(0x000f0000, ULL)) << (48-16)) | \
-     (((base)  & _AC(0x00ffffff, ULL)) << 16) |      \
-     (((limit) & _AC(0x0000ffff, ULL))))
 
 struct _kvm_segment {
     uint64_t base;
@@ -119,9 +102,9 @@ struct _kvm_segment {
 
 #define GDT_TO_KVM_SEGMENT(seg, gdt_table, sel) \
     do {                                        \
-        uint64_t gdt_ent = gdt_table[sel];         \
-        seg.base = GDT_GET_BASE(gdt_ent);       \
-        seg.limit = GDT_GET_LIMIT(gdt_ent);     \
+        uint64_t gdt_ent = gdt_table[sel];      \
+        seg.base = 0;                           \
+        seg.limit = 0xffffffff;                 \
         seg.selector = sel * 8;                 \
         seg.type = GDT_GET_TYPE(gdt_ent);       \
         seg.present = GDT_GET_P(gdt_ent);       \

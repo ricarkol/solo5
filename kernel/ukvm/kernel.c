@@ -31,7 +31,7 @@ void fun()
         printf("yeah2\n");
 }
 
-void c_start32(struct ukvm_boot_info *bi)
+void _start(struct ukvm_boot_info *bi)
 {
     int ret;
     char str[] = "blablabla\n";
