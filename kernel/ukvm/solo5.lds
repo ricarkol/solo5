@@ -1,7 +1,7 @@
 ENTRY(_start)
 
 SECTIONS {
-    . = 0x1000;
+    . = 0x7000;
 
     /* Code */
     _stext = .;
@@ -15,6 +15,7 @@ SECTIONS {
     . = ALIGN(0x1000);
     _etext = .;
 
+    . = 0x10000;
     .rodata :
     {
         *(.rodata)
