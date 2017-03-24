@@ -20,9 +20,9 @@
 
 #include "kernel.h"
 
-void _start(struct ukvm_boot_info *bi)
+void _startXXX(struct ukvm_boot_info *bi)
 {
-    int ret;
+//    int ret;
 
     bi = (struct ukvm_boot_info *) 0x2000;
 
@@ -39,8 +39,8 @@ void _start(struct ukvm_boot_info *bi)
 
     intr_enable();
 
-    ret = solo5_app_main((char *)bi->cmdline);
-    printf("Solo5: solo5_app_main() returned with %d\n", ret);
+//    ret = solo5_app_main((char *)bi->cmdline);
+//    printf("Solo5: solo5_app_main() returned with %d\n", ret);
 
     platform_exit();
 }
