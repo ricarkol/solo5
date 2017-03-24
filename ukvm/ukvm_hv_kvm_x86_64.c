@@ -59,14 +59,15 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     struct kvm_segment data_seg, code_seg;
     uint64_t *gdt = (uint64_t *) (hv->mem + X86_GDT_BASE);
 
-    ukvm_x86_setup_gdt(hv->mem);
+    //ukvm_x86_setup_gdt(hv->mem);
 
-    setup_cpuid(hvb);
+    if (0)    setup_cpuid(hvb);
 
     ret = ioctl(hvb->vcpufd, KVM_GET_SREGS, &sregs);
     if (ret == -1)
         err(1, "KVM: ioctl (GET_SREGS) failed");
 
+    if (0) {
     GDT_TO_KVM_SEGMENT(code_seg, gdt, X86_GDT_CODE);
     GDT_TO_KVM_SEGMENT(data_seg, gdt, X86_GDT_DATA);;
     sregs.cs = code_seg;
@@ -74,12 +75,15 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     sregs.es = data_seg;
     sregs.fs = data_seg;
     sregs.gs = data_seg;
-
     sregs.gdt.base = X86_GDT_BASE;
     sregs.gdt.limit = X86_GDTR_LIMIT;
+    }
+
+    sregs.cs.base = 0;
+    sregs.cs.selector = 0;
 
     // just set protected mode
-    sregs.cr0 |= X86_CR0_PE;
+    //sregs.cr0 |= X86_CR0_PE;
 
     ret = ioctl(hvb->vcpufd, KVM_SET_SREGS, &sregs);
     if (ret == -1)

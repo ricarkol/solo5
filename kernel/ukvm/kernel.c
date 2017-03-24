@@ -20,7 +20,7 @@
 
 #include "kernel.h"
 
-void _start(struct ukvm_boot_info *bi)
+void c_start32(struct ukvm_boot_info *bi)
 {
     int ret;
 

@@ -47,7 +47,7 @@ case $(uname -s) in
         mkdir -p ${HOST_INCDIR}
         cp -R ${CC_INCDIR}/. ${HOST_INCDIR}
 
-        HOST_CFLAGS="-nostdinc -m32"
+        HOST_CFLAGS="-nostdinc"
         BUILD_UKVM="yes"
         BUILD_VIRTIO="yes"
         ;;

@@ -21,15 +21,16 @@ include $(TOP)/Makefile.common
 COMMON_COBJS=\
 abort.o \
 cpu.o \
-cpu_vectors.o \
 ee_printf.o \
 intr.o \
 lib.o \
 malloc.o \
 exit.o \
-pvclock.o
+pvclock.o \
+cpu_vectors.o
 
 UKVM_COBJS=\
+ukvm/boot.o \
 ukvm/kernel.o \
 ukvm/gdt.o \
 ukvm/io.o \
