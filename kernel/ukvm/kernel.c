@@ -20,29 +20,16 @@
 
 #include "kernel.h"
 
-int bla = 0x10000000;
-
-void fun()
-{
-    int ble = 0x010010;
-    if (ble == 0x010010)
-        printf("yeah1\n");
-    if (bla == 0x10000000)
-        printf("yeah2\n");
-}
-
 void _start(struct ukvm_boot_info *bi)
 {
     int ret;
-    char str[] = "blablabla\n";
-    printf(str);
+
+    bi = (struct ukvm_boot_info *) 0x2000;
 
     printf("            |      ___|\n");
     printf("  __|  _ \\  |  _ \\ __ \\\n");
     printf("\\__ \\ (   | | (   |  ) |\n");
     printf("____/\\___/ _|\\___/____/\n");
-
-    fun();
 
     gdt_init();
     mem_init(bi->mem_size, bi->kernel_end);

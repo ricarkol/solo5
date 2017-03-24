@@ -113,8 +113,6 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
         .rflags = X86_INIT_RFLAGS,
         .rsp = hv->mem_size - 8, /* x86_64 ABI requires ((rsp + 8) % 16) == 0 */
         .rdi = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
-        .rcx = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
-        .rax = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
     };
     ret = ioctl(hvb->vcpufd, KVM_SET_REGS, &regs);
     if (ret == -1)
