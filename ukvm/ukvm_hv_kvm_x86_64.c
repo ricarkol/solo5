@@ -105,7 +105,7 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     bi->kernel_end = gpa_kend;
     bi->cmdline = X86_CMDLINE_BASE;
 
-    gpa_ep = 0x00100250;
+    gpa_ep = 0x001001e0;
 
     /*
      * Initialize user registers using (Linux) x86_64 ABI convention.
