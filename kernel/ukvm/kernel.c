@@ -26,9 +26,9 @@ void fun()
 {
     int ble = 0x010010;
     if (ble == 0x010010)
-        while (1);
+        printf("yeah1\n");
     if (bla == 0x10000000)
-        while (1);
+        printf("yeah2\n");
 }
 
 void c_start32(struct ukvm_boot_info *bi)
@@ -37,12 +37,12 @@ void c_start32(struct ukvm_boot_info *bi)
     char str[] = "blablabla\n";
     printf(str);
 
-    fun();
-
     printf("            |      ___|\n");
     printf("  __|  _ \\  |  _ \\ __ \\\n");
     printf("\\__ \\ (   | | (   |  ) |\n");
     printf("____/\\___/ _|\\___/____/\n");
+
+    fun();
 
     gdt_init();
     mem_init(bi->mem_size, bi->kernel_end);

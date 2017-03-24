@@ -80,7 +80,6 @@ static void hypercall_puts(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 {
     struct ukvm_puts *p =
         UKVM_CHECKED_GPA_P(hv, gpa, sizeof (struct ukvm_puts));
-    printf("%p %p\n", (void *) ((uint64_t) p - (uint64_t) hv->mem), (void *) gpa);
     int rc = write(1, UKVM_CHECKED_GPA_P(hv, p->data, p->len), p->len);
     assert(rc >= 0);
 }
