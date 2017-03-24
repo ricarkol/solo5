@@ -168,17 +168,10 @@ enum x86_gdt_selector {
  */
 #define X86_GDT_BASE            0x1000
 #define X86_GDT_SIZE            0x1000
-#define X86_PML4_BASE           0x2000
-#define X86_PML4_SIZE           0x1000
-#define X86_PDPTE_BASE          0x3000
-#define X86_PDPTE_SIZE          0x1000
-#define X86_PDE_BASE            0x4000
-#define X86_PDE_SIZE            0x1000
-#define X86_BOOT_INFO_BASE      0x5000
+#define X86_BOOT_INFO_BASE      0x2000
 #define X86_BOOT_INFO_SIZE      0x1000
-#define X86_CMDLINE_BASE        0x6000
+#define X86_CMDLINE_BASE        0x3000
 #define X86_CMDLINE_SIZE        0x2000
-#define X86_GUEST_MIN_BASE      0x8000
 
 #define X86_GUEST_PAGE_SIZE     0x200000
 

@@ -30,8 +30,12 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include "ukvm.h"
+#include <linux/kvm.h>
+#include "ukvm_hv_kvm.h"
+#include "ukvm_cpu_x86_64.h"
 
 struct ukvm_module ukvm_module_core;
 
@@ -81,6 +85,14 @@ static void hypercall_puts(struct ukvm_hv *hv, ukvm_gpa_t gpa)
     struct ukvm_puts *p =
         UKVM_CHECKED_GPA_P(hv, gpa, sizeof (struct ukvm_puts));
     int rc = write(1, UKVM_CHECKED_GPA_P(hv, p->data, p->len), p->len);
+
+    int ret;
+    struct ukvm_hvb *hvb = hv->b;
+    struct kvm_sregs sregs;
+    ret = ioctl(hvb->vcpufd, KVM_GET_SREGS, &sregs);
+    if (ret == -1)
+        err(1, "KVM: ioctl (GET_SREGS) failed");
+
     assert(rc >= 0);
 }
 

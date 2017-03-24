@@ -25,31 +25,6 @@
 
 #include "ukvm_cpu_x86_64.h"
 
-void ukvm_x86_setup_pagetables(uint8_t *mem, size_t mem_size)
-{
-    uint64_t *pml4 = (uint64_t *)(mem + X86_PML4_BASE);
-    uint64_t *pdpte = (uint64_t *)(mem + X86_PDPTE_BASE);
-    uint64_t *pde = (uint64_t *)(mem + X86_PDE_BASE);
-    uint64_t paddr;
-
-    /*
-     * For simplicity we currently use 2MB pages and only a single
-     * PML4/PDPTE/PDE.  Sanity check that the guest size is a multiple of the
-     * page size and will fit in a single PDE (512 entries).
-     */
-    assert((mem_size & (X86_GUEST_PAGE_SIZE - 1)) == 0);
-    assert(mem_size <= (X86_GUEST_PAGE_SIZE * 512));
-
-    memset(pml4, 0, X86_PML4_SIZE);
-    memset(pdpte, 0, X86_PDPTE_SIZE);
-    memset(pde, 0, X86_PDE_SIZE);
-
-    *pml4 = X86_PDPTE_BASE | (X86_PDPT_P | X86_PDPT_RW);
-    *pdpte = X86_PDE_BASE | (X86_PDPT_P | X86_PDPT_RW);
-    for (paddr = 0; paddr < mem_size; paddr += X86_GUEST_PAGE_SIZE, pde++)
-        *pde = paddr | (X86_PDPT_P | X86_PDPT_RW | X86_PDPT_PS);
-}
-
 /* Setup a descriptor in the Global Descriptor Table */
 void gdt_set_gate(int num, unsigned long base, unsigned long limit, unsigned char access, unsigned char gran, uint8_t *mem)
 {

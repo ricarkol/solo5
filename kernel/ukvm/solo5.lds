@@ -1,7 +1,7 @@
 ENTRY(_start)
 
 SECTIONS {
-    . = 0x7000;
+    . = 0x5000;
 
     /* Code */
     _stext = .;
