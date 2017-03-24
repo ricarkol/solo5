@@ -20,11 +20,24 @@
 
 #include "kernel.h"
 
+int bla = 0x10000000;
+
+void fun()
+{
+    int ble = 0x010010;
+    if (ble == 0x010010)
+        while (1);
+    if (bla == 0x10000000)
+        while (1);
+}
+
 void c_start32(struct ukvm_boot_info *bi)
 {
     int ret;
+    char str[] = "blablabla\n";
+    printf(str);
 
-    while (1);
+    fun();
 
     printf("            |      ___|\n");
     printf("  __|  _ \\  |  _ \\ __ \\\n");

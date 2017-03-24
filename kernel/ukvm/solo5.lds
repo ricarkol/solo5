@@ -3,14 +3,6 @@ ENTRY(_start)
 SECTIONS {
     . = 0x1000;
 
-    /* Multiboot header */
-    .bootstrap :
-    {
-        *(.bootstrap)
-    }
-
-    . = ALIGN(0x1000);
-
     /* Code */
     _stext = .;
 
