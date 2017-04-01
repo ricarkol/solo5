@@ -46,8 +46,12 @@
 #define X86_CR0_MP              _BITUL(X86_CR0_MP_BIT)
 #define X86_CR0_EM_BIT          2 /* Emulation */
 #define X86_CR0_EM              _BITUL(X86_CR0_EM_BIT)
+#define X86_CR0_NE_BIT          5 /* Numeric Exception */
+#define X86_CR0_NE              _BITUL(X86_CR0_NE_BIT)
 #define X86_CR0_PG_BIT          31 /* Paging */
 #define X86_CR0_PG              _BITUL(X86_CR0_PG_BIT)
+
+#define X86_CR0_INIT            (X86_CR0_PE | X86_CR0_PG | X86_CR0_NE)
 
 /*
  * Intel CPU features in CR4
@@ -58,6 +62,17 @@
 #define X86_CR4_OSFXSR          _BITUL(X86_CR4_OSFXSR_BIT)
 #define X86_CR4_OSXMMEXCPT_BIT  10 /* OS support for FP exceptions */
 #define X86_CR4_OSXMMEXCPT      _BITUL(X86_CR4_OSXMMEXCPT_BIT)
+#define X86_CR4_VMXE_BIT        13 /* VMX enabled */
+#define X86_CR4_VMXE            _BITUL(X86_CR4_VMXE_BIT)
+
+/*
+ * Intel SDM section 23.8 "Restrictions on VMX Operation" seems to imply that
+ * X86_CR4_VMXE should be set on VMENTRY to support old processors, however KVM
+ * (but not FreeBSD vmm) does not like us setting this bit. Leave it cleared
+ * for now and revisit later.
+ */
+#define X86_CR4_INIT            (X86_CR4_PAE | X86_CR4_OSFXSR | \
+                                X86_CR4_OSXMMEXCPT)
 
 /* 
  * Intel CPU features in EFER
@@ -66,6 +81,8 @@
 #define X86_EFER_LME            _BITUL(X86_EFER_LME_BIT)
 #define X86_EFER_LMA_BIT        10 /* Long mode active (R/O) */
 #define X86_EFER_LMA            _BITUL(X86_EFER_LMA_BIT)
+
+#define X86_EFER_INIT           (X86_EFER_LME | X86_EFER_LMA)
 
 /*
  * Intel long mode page directory/table entries
@@ -76,7 +93,6 @@
 #define X86_PDPT_RW             _BITUL(X86_PDPT_RW_BIT)
 #define X86_PDPT_PS_BIT         7 /* Page size */
 #define X86_PDPT_PS             _BITUL(X86_PDPT_PS_BIT)
-
 
 #define GDT_DESC_OFFSET(n) ((n) * 0x8)
 
@@ -142,6 +158,62 @@ enum x86_gdt_selector {
 };
 
 #define X86_GDTR_LIMIT ((sizeof (struct gdt_entry) * X86_GDT_MAX) - 1)
+
+/*
+ * Representation of an x86_64 shadow register (a.k.a. descriptor cache
+ * register), as defined by Intel SDM section 24.4.1 "Guest Register State".
+ */
+struct x86_sreg {
+    uint16_t selector;
+    uint64_t base;
+    uint32_t limit;             /* NOTE: Value is always in bytes (!) */
+    uint8_t type;
+    uint8_t p, dpl, db, s, l, g, avl, unusable;
+};
+
+/*
+ * Shadow register fields
+ */
+#define X86_SREG_UNUSABLE_BIT   16
+#define X86_SREG_UNUSABLE       _BITUL(X86_SREG_UNUSABLE_BIT)
+
+/*
+ * Initial shadow register values
+ *
+ * NOTE: For a successful VMENTRY into a long mode guest, the "Accessed" bit
+ * (bit 0) in the CS/SS/DS/ES/FS/GS type field must be set (Intel SDM section
+ * 26.3.1.2 "Checks on Guest Segment Registers"). KVM "helpfully" sets this for
+ * us regardless, setting it explicitly here does no harm and gives us one
+ * consistent place for the initial values.
+ */
+static const struct x86_sreg ukvm_x86_sreg_code = {
+    .selector = X86_GDT_CODE,
+    .base = 0,
+    .limit = 0xffffffff,
+    .type = 9,                  /* Execute-only, accessed */
+    .p = 1, .dpl = 0, .db = 0, .s = 1, .l = 1, .g = 1
+};
+
+static const struct x86_sreg ukvm_x86_sreg_data = {
+    .selector = X86_GDT_DATA,
+    .base = 0,
+    .limit = 0xffffffff,
+    .type = 3,                  /* Read-write, accessed */
+    .p = 1, .dpl = 0, .db = 1, .s = 1, .l = 0, .g = 1
+};
+
+static const struct x86_sreg ukvm_x86_sreg_tr = {
+    .selector = X86_GDT_NULL,
+    .base = 0,
+    .limit = 0,
+    .type = 11,                 /* 64-bit TSS, busy */
+    .p = 1
+};
+
+static const struct x86_sreg ukvm_x86_sreg_unusable = {
+    .selector = X86_GDT_NULL,
+    .unusable = 1
+};
 
 /*
  * Monitor memory map for x86 CPUs:

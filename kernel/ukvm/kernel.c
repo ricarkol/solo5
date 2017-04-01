@@ -35,7 +35,7 @@ void _startXXX(struct ukvm_boot_info *bi)
     mem_init(bi->mem_size, bi->kernel_end);
     intr_init();
 
-    time_init();
+    time_init(bi->cpu.tsc_freq);
 
     intr_enable();
 

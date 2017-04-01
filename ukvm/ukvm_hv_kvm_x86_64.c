@@ -55,7 +55,6 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
         ukvm_gpa_t gpa_kend, char **cmdline)
 {
     struct ukvm_hvb *hvb = hv->b;
-    struct kvm_sregs sregs;
     int ret;
     struct kvm_segment data_seg, code_seg;
     uint64_t *gdt = (uint64_t *) (hv->mem + X86_GDT_BASE);
@@ -105,12 +104,31 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
     bi->kernel_end = gpa_kend;
     bi->cmdline = X86_CMDLINE_BASE;
 
+    ret = ioctl(hvb->kvmfd, KVM_CHECK_EXTENSION, KVM_CAP_GET_TSC_KHZ);
+    if (ret == -1)
+        err(1, "KVM: ioctl (KVM_CHECK_EXTENSION) failed");
+    if (ret != 1)
+        errx(1, "KVM: host does not support KVM_CAP_GET_TSC_KHZ");
+    int tsc_khz = ioctl(hvb->vcpufd, KVM_GET_TSC_KHZ);
+    if (tsc_khz == -1) {
+        if (errno == EIO)
+            errx(1, "KVM: host TSC is unstable, cannot continue");
+        else
+            err(1, "KVM: ioctl (KVM_GET_TSC_KHZ) failed");
+    }
+    /*
+     * KVM gives us the VCPU's TSC frequency in kHz; this is marginally less
+     * accurate than what we want, but no less accurate than any other
+     * KVM-based monitor.
+     */
+    bi->cpu.tsc_freq = tsc_khz * 1000ULL;
+
     /*
      * Initialize user registers using (Linux) x86_64 ABI convention.
      */
     struct kvm_regs regs = {
         .rip = gpa_ep,
-        .rflags = X86_INIT_RFLAGS,
+        .rflags = X86_RFLAGS_INIT,
         .rsp = hv->mem_size - 8, /* x86_64 ABI requires ((rsp + 8) % 16) == 0 */
         .rdi = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
     };

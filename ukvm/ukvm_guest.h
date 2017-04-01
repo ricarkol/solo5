@@ -26,6 +26,13 @@
 
 #ifdef __x86_64__
 /*
+ * Arch-dependent part of struct ukvm_boot_info.
+ */
+struct ukvm_cpu_boot_info {
+    uint64_t tsc_freq;                  /* TSC frequency in Hz */
+};
+
+/*
  * PIO base address used to dispatch hypercalls.
  */
 #define UKVM_HYPERCALL_PIO_BASE 0x500
@@ -108,9 +115,10 @@ static inline void ukvm_do_hypercall(int n, volatile void *arg)
  * the guest entrypoint.
  */
 struct ukvm_boot_info {
-    uint32_t mem_size;                  /* Memory size in bytes */
-    uint32_t kernel_end;                /* Address of end of kernel */
-    uint32_t cmdline;     /* Address of command line (C string) */
+    uint64_t mem_size;                  /* Memory size in bytes */
+    uint64_t kernel_end;                /* Address of end of kernel */
+    UKVM_GUEST_PTR(char *) cmdline;     /* Address of command line (C string) */
+    struct ukvm_cpu_boot_info cpu;      /* Arch-dependent part (see above) */
 };
 /*
  * Maximum size of guest command line, including the string terminator.
@@ -123,7 +131,8 @@ struct ukvm_boot_info {
  */
 enum ukvm_hypercall {
     /* UKVM_HYPERCALL_RESERVED=0 */
-    UKVM_HYPERCALL_PUTS=1,
+    UKVM_HYPERCALL_WALLTIME=1,
+    UKVM_HYPERCALL_PUTS,
     UKVM_HYPERCALL_POLL,
     UKVM_HYPERCALL_BLKINFO,
     UKVM_HYPERCALL_BLKWRITE,
@@ -137,6 +146,12 @@ enum ukvm_hypercall {
 /*
  * Hypercall definitions follow.
  */
+
+/* UKVM_HYPERCALL_WALLTIME */
+struct ukvm_walltime {
+    /* OUT */
+    uint64_t nsecs;
+};
 
 /* UKVM_HYPERCALL_PUTS */
 struct ukvm_puts {

@@ -50,5 +50,3 @@ void ukvm_x86_setup_gdt(uint8_t *mem)
     gdt_set_gate(X86_GDT_CODE, 0, 0xFFFFFFFF, 0x9A, 0xCF, mem);
     gdt_set_gate(X86_GDT_DATA, 0, 0xFFFFFFFF, 0x92, 0xCF, mem);
 }
-
-

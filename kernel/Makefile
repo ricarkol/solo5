@@ -25,9 +25,13 @@ ee_printf.o \
 intr.o \
 lib.o \
 malloc.o \
+<<<<<<< HEAD
 exit.o \
 pvclock.o \
 cpu_vectors.o
+=======
+exit.o
+>>>>>>> multifactor
 
 UKVM_COBJS=\
 ukvm/boot.o \
@@ -38,6 +42,7 @@ ukvm/platform.o \
 ukvm/platform_intr.o \
 ukvm/mem.o \
 ukvm/time.o \
+ukvm/tscclock.o \
 $(COMMON_COBJS)
 
 VIRTIO_COBJS=\
@@ -54,6 +59,7 @@ virtio/virtio_net.o \
 virtio/virtio_blk.o \
 virtio/tscclock.o \
 virtio/clock_subr.o \
+virtio/pvclock.o \
 $(COMMON_COBJS)
 
 HEADERS=\
