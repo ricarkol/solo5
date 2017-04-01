@@ -23,29 +23,12 @@
 /* Wall clock offset at monotonic time base. */
 static uint64_t wc_epochoffset;
 
-/* Base time values at the last call to tscclock_monotonic(). */
-static uint64_t time_base;
-static uint64_t tsc_base;
-
-/* Multiplier for converting TSC ticks to nsecs. (0.32) fixed point. */
-static uint32_t tsc_mult;
-
 /*
  * Beturn monotonic time using TSC clock.
  */
 uint64_t tscclock_monotonic(void)
 {
-    uint64_t tsc_now, tsc_delta;
-
-    /*
-     * Update time_base (monotonic time) and tsc_base (TSC time).
-     */
-    tsc_now = cpu_rdtsc();
-    tsc_delta = tsc_now - tsc_base;
-    time_base += mul64_32(tsc_delta, tsc_mult);
-    tsc_base = tsc_now;
-
-    return time_base;
+    return 0;
 }
 
 /*
@@ -63,32 +46,7 @@ uint64_t tscclock_monotonic(void)
  */
 int tscclock_init(uint64_t tsc_freq)
 {
-    /*
-     * Calculate TSC scaling multiplier.
-     *
-     * (0.32) tsc_mult = NSEC_PER_SEC (32.32) / tsc_freq (32.0)
-     */
-    tsc_mult = (NSEC_PER_SEC << 32) / tsc_freq;
-
-    /*
-     * Monotonic time begins at tsc_base (first read of TSC before
-     * calibration).
-     */
-    tsc_base = cpu_rdtsc();
-    time_base = mul64_32(tsc_base, tsc_mult);
-
-    /*
-     * Compute wall clock epoch offset by subtracting monotonic time_base from
-     * wall time at boot.
-     *
-     * TODO: This arrangement minimises the use of hypercalls, but is subject
-     * to clock skew over time and cannot get corrections from the host (via
-     * e.g. NTP). 
-     */
-    struct ukvm_walltime t;
-    ukvm_do_hypercall(UKVM_HYPERCALL_WALLTIME, &t);
-    wc_epochoffset = t.nsecs - time_base;
-
+    tsc_freq = tsc_freq;
     return 0;
 }
 

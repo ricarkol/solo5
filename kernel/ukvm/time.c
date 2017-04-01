@@ -22,18 +22,23 @@
 
 void time_init(uint64_t tsc_freq)
 {
-    assert(tscclock_init(tsc_freq) == 0);
+    //assert(tscclock_init(tsc_freq) == 0);
+    tsc_freq = tsc_freq;
 }
 
 uint64_t solo5_clock_monotonic(void)
 {
-    return tscclock_monotonic();
+    struct ukvm_walltime t;
+    ukvm_do_hypercall(UKVM_HYPERCALL_WALLTIME, &t);
+    return  t.nsecs;
 }
 
 /* return wall time in nsecs */
 uint64_t solo5_clock_wall(void)
 {
-    return tscclock_monotonic() + tscclock_epochoffset();
+    struct ukvm_walltime t;
+    ukvm_do_hypercall(UKVM_HYPERCALL_WALLTIME, &t);
+    return  t.nsecs;
 }
 
 int solo5_poll(uint64_t until_nsecs)

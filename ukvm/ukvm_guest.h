@@ -64,6 +64,14 @@ static inline void ukvm_do_hypercall(int n, volatile void *arg)
 #else
 
 /*
+ * Arch-dependent part of struct ukvm_boot_info.
+ */
+struct ukvm_cpu_boot_info {
+    uint64_t tsc_freq;                  /* TSC frequency in Hz */
+};
+
+
+/*
  * PIO base address used to dispatch hypercalls.
  */
 #define UKVM_HYPERCALL_PIO_BASE 0x500

@@ -55,6 +55,8 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
         ukvm_gpa_t gpa_kend, char **cmdline)
 {
     struct ukvm_hvb *hvb = hv->b;
+    struct kvm_sregs sregs;
+
     int ret;
     struct kvm_segment data_seg, code_seg;
     uint64_t *gdt = (uint64_t *) (hv->mem + X86_GDT_BASE);
@@ -128,7 +130,7 @@ void ukvm_hv_vcpu_init(struct ukvm_hv *hv, ukvm_gpa_t gpa_ep,
      */
     struct kvm_regs regs = {
         .rip = gpa_ep,
-        .rflags = X86_RFLAGS_INIT,
+        .rflags = X86_INIT_RFLAGS,
         .rsp = hv->mem_size - 8, /* x86_64 ABI requires ((rsp + 8) % 16) == 0 */
         .rdi = X86_BOOT_INFO_BASE,                  /* arg1 is ukvm_boot_info */
     };

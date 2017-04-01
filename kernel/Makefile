@@ -25,13 +25,8 @@ ee_printf.o \
 intr.o \
 lib.o \
 malloc.o \
-<<<<<<< HEAD
 exit.o \
-pvclock.o \
 cpu_vectors.o
-=======
-exit.o
->>>>>>> multifactor
 
 UKVM_COBJS=\
 ukvm/boot.o \
