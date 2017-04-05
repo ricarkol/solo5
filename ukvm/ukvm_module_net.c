@@ -157,6 +157,7 @@ static void hypercall_netread(struct ukvm_hv *hv, ukvm_gpa_t gpa)
     ret = read(netfd, UKVM_CHECKED_GPA_P(hv, rd->data, rd->len), rd->len);
     if ((ret == 0) ||
         (ret == -1 && errno == EAGAIN)) {
+        printf("error on net read %d\n", ret);
         rd->ret = -1;
         return;
     }
@@ -219,6 +220,7 @@ static int setup(struct ukvm_hv *hv)
                  "%02x:%02x:%02x:%02x:%02x:%02x",
                  guest_mac[0], guest_mac[1], guest_mac[2],
                  guest_mac[3], guest_mac[4], guest_mac[5]);
+        printf("mac:%s\n", netinfo.mac_str);
     }
 
     assert(ukvm_core_register_hypercall(UKVM_HYPERCALL_NETINFO,

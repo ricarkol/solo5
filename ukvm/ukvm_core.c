@@ -59,6 +59,7 @@ ukvm_hypercall_fn_t ukvm_core_hypercalls[UKVM_HYPERCALL_MAX] = { 0 };
 
 int ukvm_core_register_hypercall(int nr, ukvm_hypercall_fn_t fn)
 {
+    printf("registering hypercall %d with %p\n", nr, fn);
     if (nr >= UKVM_HYPERCALL_MAX)
         return -1;
     if (ukvm_core_hypercalls[nr] != NULL)
