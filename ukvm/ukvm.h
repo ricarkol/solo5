@@ -142,6 +142,7 @@ extern struct ukvm_module ukvm_module_core;
 extern struct ukvm_module ukvm_module_blk;
 extern struct ukvm_module ukvm_module_net;
 extern struct ukvm_module ukvm_module_gdb;
+extern struct ukvm_module ukvm_module_rr;
 
 /*
  * GDB specific functions to be implemented on all backends for all

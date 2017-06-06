@@ -193,6 +193,7 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
             goto out_invalid;
         memset(daddr + filesz, 0, memsz - filesz);
 
+#if 0
         prot = PROT_NONE;
         if (phdr[ph_i].p_flags & PF_R)
             prot |= PROT_READ;
@@ -205,6 +206,7 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
                   file, ph_i);
         if (mprotect(daddr, _end - paddr, prot) == -1)
             goto out_error;
+#endif
     }
 
     free (phdr);
