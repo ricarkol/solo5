@@ -16,9 +16,10 @@
 # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-UKVM_TARGETS=test_globals.ukvm ukvm-bin
+UKVM_TARGET=test_globals.ukvm
+UKVM_TARGETS=$(UKVM_TARGET) ukvm-bin
 VIRTIO_TARGETS=test_globals.virtio
 MUEN_TARGETS=test_globals.muen
-UKVM_MODULES=
+UKVM_MODULES=rr
 
 include ../Makefile.tests
