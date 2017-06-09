@@ -203,8 +203,8 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         if (prot & PROT_WRITE && prot & PROT_EXEC)
             warnx("%s: Warning: phdr[%u] requests WRITE and EXEC permissions",
                   file, ph_i);
-        if (mprotect(daddr, _end - paddr, prot) == -1)
-            goto out_error;
+        //if (mprotect(daddr, _end - paddr, prot) == -1)
+        //    goto out_error;
     }
 
     free (phdr);
