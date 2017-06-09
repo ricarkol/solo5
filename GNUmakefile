@@ -26,6 +26,12 @@ all: ukvm virtio muen
 .DEFAULT_GOAL := all
 .NOTPARALLEL: ukvm virtio muen
 
+.PHONY: includeos
+includeos:
+	cp kernel/ukvm/solo5.o solo5.o
+	mkdir -p include
+	cp kernel/solo5.h include/.
+
 .PHONY: virtio
 virtio:
 ifeq ($(BUILD_VIRTIO), yes)
