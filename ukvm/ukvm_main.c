@@ -118,7 +118,7 @@ int main(int argc, char **argv)
 {
     //size_t mem_size = 0x20000000;
     size_t mem_size = 0x200000;
-    ukvm_gpa_t gpa_ep, gpa_kend;
+    ukvm_gpa_t gpa_ep, gpa_kend, gpa_tend;
     const char *prog;
     const char *elffile;
     int matched;
@@ -172,7 +172,13 @@ int main(int argc, char **argv)
 
     struct ukvm_hv *hv = ukvm_hv_init(mem_size);
 
-    ukvm_elf_load(elffile, hv->mem, hv->mem_size, &gpa_ep, &gpa_kend);
+    ukvm_elf_load(elffile, hv->mem, hv->mem_size,
+                  &gpa_ep, &gpa_kend, &gpa_tend);
+
+    /* Store entry point and kernel end */
+    hv->p_entry = gpa_ep;
+    hv->p_kend = gpa_kend;
+    hv->p_tend = gpa_tend;
 
     char *cmdline;
     ukvm_hv_vcpu_init(hv, gpa_ep, gpa_kend, &cmdline);

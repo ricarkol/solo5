@@ -43,6 +43,9 @@
 struct ukvm_hv {
     uint8_t *mem;
     size_t mem_size;
+    ukvm_gpa_t p_entry; // offset of the entry point
+    ukvm_gpa_t p_tend; // offset of kernel text end
+    ukvm_gpa_t p_kend; // offset of kernel end
     struct ukvm_hvb *b;
 };
 
@@ -51,7 +54,7 @@ struct ukvm_hv {
  * the entry point (gpa_ep) and last byte used by the binary (gpa_kend).
  */
 void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
-        ukvm_gpa_t *p_entry, ukvm_gpa_t *p_end);                
+        ukvm_gpa_t *p_entry, ukvm_gpa_t *p_kend, ukvm_gpa_t *p_tend);
 
 /*
  * Check that (gpa) and (gpa + sz) are within guest memory. Returns a host-side

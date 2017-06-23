@@ -91,7 +91,7 @@ add_module ()
 
 UKVM_CFLAGS=
 UKVM_LDFLAGS=
-UKVM_LDLIBS=-lz
+UKVM_LDLIBS="-lz -ludis86"
 UKVM_HEADERS=
 UKVM_OBJS=
 add_obj ukvm_core.o ukvm_elf.o ukvm_main.o

@@ -38,6 +38,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "ukvm.h"
 
@@ -80,7 +81,7 @@ static ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
  *
  * Memory will look like this after the elf is loaded:
  *
- * *mem                    *p_entry                   *p_end
+ * *mem                  *p_entry     *p_tend          *p_kend
  *   |             |                    |                |
  *   |    ...      | .text .rodata      |   .data .bss   |
  *   |             |        code        |   00000000000  |
@@ -88,7 +89,7 @@ static ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
  *
  */
 void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
-       ukvm_gpa_t *p_entry, ukvm_gpa_t *p_end)
+       ukvm_gpa_t *p_entry, ukvm_gpa_t *p_kend, ukvm_gpa_t *p_tend)
 {
     int fd_kernel;
     ssize_t numb;
@@ -103,7 +104,7 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     /* elf entry point (on physical memory) */
     *p_entry = 0;
     /* highest byte of the program (on physical memory) */
-    *p_end = 0;
+    *p_kend = 0;
 
     fd_kernel = open(file, O_RDONLY);
     if (fd_kernel == -1)
@@ -182,8 +183,10 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         else {
             _end = result;
         }
-        if (_end > *p_end)
-            *p_end = _end;
+        if (_end > *p_kend)
+            *p_kend = _end;
+        if (phdr[ph_i].p_flags & PF_X)
+            *p_tend = _end;
 
         daddr = mem + paddr;
         numb = pread_in_full(fd_kernel, daddr, filesz, offset);
@@ -193,7 +196,6 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
             goto out_invalid;
         memset(daddr + filesz, 0, memsz - filesz);
 
-#if 0
         prot = PROT_NONE;
         if (phdr[ph_i].p_flags & PF_R)
             prot |= PROT_READ;
@@ -206,7 +208,6 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
                   file, ph_i);
         if (mprotect(daddr, _end - paddr, prot) == -1)
             goto out_error;
-#endif
     }
 
     free (phdr);

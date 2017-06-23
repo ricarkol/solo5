@@ -9,14 +9,18 @@
 #include <assert.h>
 #include <string.h>
 #include <err.h>
+#include <sys/mman.h>
 
 #include <zlib.h>
 #include <linux/kvm.h>
+#include <udis86.h>
+
+#include "queue.h"
 
 #include "ukvm.h"
 #include "ukvm_hv_kvm.h"
 #include "ukvm_rr.h"
-#include "rr_rdtsc_helper.h"
+
 
 #define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
@@ -27,6 +31,17 @@
 #define CHECK(a,b,c) do{}while(0)
 #define CHECKS_INIT() do{}while(0)
 #endif
+
+struct trap_t {
+    ukvm_gpa_t    insn_off;      /* Instruction offset (address) */
+    int           insn_mnemonic; /* Really an enum ud_mnemonic_code */
+    int           insn_len;      /* Instruction length in bytes */
+
+    SLIST_ENTRY(trap_t) entries;
+};
+
+SLIST_HEAD(traps_head, trap_t);
+static struct traps_head traps;
 
 int rr_mode = RR_MODE_NONE;
 static int rr_fd;
@@ -52,17 +67,43 @@ void rr(uint8_t *x, size_t sz, int l, const char *func, int line)
 
 static int rdtsc_init_traps(struct ukvm_hv *hv)
 {
-    if (NUM_RDTSC_LOCS == 0)
-        return 0;
-    
-    int i;
     struct kvm_guest_debug dbg = {0};
-    
-    for (i = 0; i < NUM_RDTSC_LOCS; i++) {
-        uint8_t *addr = hv->mem + rdtsc_locs[i];
-        /* rdtsc is 2 bytes; we replace it with a int3, which traps */
+    struct trap_t *trap;
+
+    /* This disassemble takes ~5ms */
+    ud_t ud_obj;
+    ud_init(&ud_obj);
+    ud_set_input_buffer(&ud_obj, hv->mem + hv->p_entry,
+                        hv->p_tend - hv->p_entry);
+    ud_set_mode(&ud_obj, 64);
+    ud_set_pc(&ud_obj, hv->p_entry);
+    ud_set_syntax(&ud_obj, UD_SYN_INTEL);
+
+    while (ud_disassemble(&ud_obj)) {
+        if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc) {
+            trap = malloc(sizeof (struct trap_t));
+            assert(trap);
+            trap->insn_off = ud_insn_off(&ud_obj);
+            trap->insn_mnemonic = ud_insn_mnemonic(&ud_obj);
+            trap->insn_len = ud_insn_len(&ud_obj);
+
+            SLIST_INSERT_HEAD(&traps, trap, entries);
+
+#ifdef RR_DO_CHECKS
+            printf("%s -- mnemonic=%d off=%"PRIx64" len=%u\n",
+                   ud_insn_asm(&ud_obj), ud_insn_mnemonic(&ud_obj),
+                   ud_insn_off(&ud_obj), ud_insn_len(&ud_obj));
+#endif
+        }
+    }
+
+    SLIST_FOREACH(trap, &traps, entries) {
+        uint8_t *addr = hv->mem + trap->insn_off;
+        int i;
+        /* We replace the first byte with an int3, which traps */
         addr[0] = 0xcc; /* int3 */
-        addr[1] = 0x90; /* nop  */
+        for (i = 0; i < trap->insn_len; i++)
+            addr[i] = 0x90; /* nop */
     }
 
     dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
@@ -266,13 +307,14 @@ static int handle_vmexits(struct ukvm_hv *hv)
         return -1;
 
     struct kvm_regs regs;
-    int ret, i;
+    struct trap_t *trap;
+    int ret;
     
     ret = ioctl(hv->b->vcpufd, KVM_GET_REGS, &regs);
     assert(ret == 0);
-    
-    for (i = 0; i < NUM_RDTSC_LOCS; i++) {
-        if (rdtsc_locs[i] == regs.rip) {
+
+    SLIST_FOREACH(trap, &traps, entries) {
+        if (trap->insn_off == regs.rip) {
             rdtsc_emulate(hv);
             return 0;
         }
@@ -288,7 +330,16 @@ static int setup(struct ukvm_hv *hv)
 
     if (rr_mode == RR_MODE_NONE)
         return 0;
-    
+
+    /*
+     * We force trapping on instructions like rdtsc by changing them to int3's
+     * and trap. And in order to change memory, we need to change the
+     * permissions.
+     */
+    if (mprotect(hv->mem, hv->mem_size,
+                 PROT_READ | PROT_WRITE | PROT_EXEC) == -1)
+        err(1, "RR: Cannot remove guest memory protection");
+
     rr_init("rr_out.dat");
     
     /* XXX should rdtsc trapping/emulation be its own module? */
