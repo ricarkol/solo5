@@ -23,8 +23,7 @@
 all: ukvm-bin
 
 Makefile.ukvm: ukvm-configure
-	./ukvm-configure /dev/null . blk net gdb rr
-
+	./ukvm-configure . blk net gdb rr
 
 -include Makefile.ukvm
 
