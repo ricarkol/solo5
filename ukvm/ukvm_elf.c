@@ -203,8 +203,15 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         if (prot & PROT_WRITE && prot & PROT_EXEC)
             warnx("%s: Warning: phdr[%u] requests WRITE and EXEC permissions",
                   file, ph_i);
-        //if (mprotect(daddr, _end - paddr, prot) == -1)
-        //    goto out_error;
+        /*
+	 * The address has to be page aligned. So, if the region starts
+	 * unaligned, we mprotect the bits before it, at a page boundary. This
+	 * might result in a crash, but that might be better than not protect
+	 * that first part.
+         */
+        if (mprotect((void *)((uint64_t)daddr & ~0xfff),
+                     _end - paddr, prot) == -1)
+            goto out_error;
     }
 
     free (phdr);
