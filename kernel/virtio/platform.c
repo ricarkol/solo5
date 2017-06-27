@@ -126,3 +126,10 @@ int platform_puts(const char *buf, int n)
 
 int solo5_console_write(const char *, size_t)
     __attribute__ ((alias("platform_puts")));
+
+int solo5_exec(unsigned char *elf __attribute__((unused)), size_t len __attribute__((unused)))
+{
+    platform_puts("Solo5: exec not supported\n",
+                  strlen("Solo5: exec not supported\n"));
+    return 0;
+}

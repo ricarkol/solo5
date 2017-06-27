@@ -122,6 +122,7 @@ enum ukvm_hypercall {
     UKVM_HYPERCALL_NETINFO,
     UKVM_HYPERCALL_NETWRITE,
     UKVM_HYPERCALL_NETREAD,
+    UKVM_HYPERCALL_EXEC,
     UKVM_HYPERCALL_MAX
 };
 
@@ -214,6 +215,13 @@ struct ukvm_poll {
 
     /* OUT */
     int ret;
+};
+
+/* UKVM_HYPERCALL_EXEC */
+struct ukvm_exec {
+    /* IN */
+    UKVM_GUEST_PTR(const char *) data;
+    size_t len;
 };
 
 #endif /* UKVM_GUEST_H */

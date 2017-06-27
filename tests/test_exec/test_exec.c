@@ -18,45 +18,23 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "kernel.h"
+#include "solo5.h"
+#include "test_hello_ukvm.h"
+#include "../../kernel/lib.c"
 
-static const char *cmdline;
-static uint64_t mem_size;
-
-void process_bootinfo(void *arg)
+static void puts(const char *s)
 {
-    struct ukvm_boot_info *bi = arg;
-
-    cmdline = bi->cmdline;
-    mem_size = bi->mem_size;
+    solo5_console_write(s, strlen(s));
 }
 
-const char *platform_cmdline(void)
+int solo5_app_main(char *cmdline)
 {
-    return cmdline;
-}
+    puts("\n**** Solo5 standalone test_exec ****\n\n");
+    puts(cmdline);
 
-uint64_t platform_mem_size(void)
-{
-    return mem_size;
-}
+    solo5_exec(___test_hello_test_hello_ukvm, ___test_hello_test_hello_ukvm_len);
 
-void platform_exit(void)
-{
-    /*
-     * Halt will cause an exit (as in "shutdown") on ukvm.
-     */
-    cpu_halt();
-}
-
-int solo5_exec(unsigned char *elf, size_t len)
-{
-    struct ukvm_exec buf;
-
-    buf.data = (char *)elf;
-    buf.len = len;
-
-    ukvm_do_hypercall(UKVM_HYPERCALL_EXEC, &buf);
+    puts("Not reached\n");
 
     return 0;
 }

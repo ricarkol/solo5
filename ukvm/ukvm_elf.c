@@ -107,11 +107,11 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
 
     fd_kernel = open(file, O_RDONLY);
     if (fd_kernel == -1)
-        goto out_error;
+        err(1, "Failed open");
 
     numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf64_Ehdr), 0);
     if (numb < 0)
-        goto out_error;
+        err(1, "Failed header read");
     if (numb != sizeof(Elf64_Ehdr))
         goto out_invalid;
 
@@ -138,10 +138,10 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
 
     phdr = malloc(buflen);
     if (!phdr)
-        goto out_error;
+        err(1, "Failed malloc");
     numb = pread_in_full(fd_kernel, phdr, buflen, ph_off);
     if (numb < 0)
-        goto out_error;
+        err(1, "Failed section header read");
     if (numb != buflen)
         goto out_invalid;
 
@@ -188,7 +188,7 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         daddr = mem + paddr;
         numb = pread_in_full(fd_kernel, daddr, filesz, offset);
         if (numb < 0)
-            goto out_error;
+            err(1, "Failed section read");
         if (numb != filesz)
             goto out_invalid;
         memset(daddr + filesz, 0, memsz - filesz);
@@ -211,16 +211,13 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
          */
         if (mprotect((void *)((uint64_t)daddr & ~0xfff),
                      _end - paddr, prot) == -1)
-            goto out_error;
+            err(1, "Failed mprotect");
     }
 
     free (phdr);
     close (fd_kernel);
     *p_entry = hdr.e_entry;
     return;
-
-out_error:
-    err(1, "%s", file);
 
 out_invalid:
     errx(1, "%s: Exec format error", file);

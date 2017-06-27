@@ -143,4 +143,9 @@ uint64_t solo5_clock_wall(void);
  */
 int solo5_poll(uint64_t until_nsecs);
 
+/*
+ * Starts a new unikernel pointed at buf. buf is an elf.
+ */
+int solo5_exec(unsigned char *buf, size_t n);
+
 #endif
