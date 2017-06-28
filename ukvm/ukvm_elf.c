@@ -72,11 +72,10 @@ static ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
 }
 
 /*
- * Load code from elf file into *mem and return the elf entry point
- * and the last byte of the program when loaded into memory. This
- * accounts not only for the last loaded piece of code from the elf,
- * but also for the zeroed out pieces that are not loaded and sould be
- * reserved.
+ * Load code from elf file or buf (if not NULL) into *mem and return the elf
+ * entry point and the last byte of the program when loaded into memory. This
+ * accounts not only for the last loaded piece of code from the elf, but also
+ * for the zeroed out pieces that are not loaded and sould be reserved.
  *
  * Memory will look like this after the elf is loaded:
  *
@@ -88,9 +87,9 @@ static ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset)
  *
  */
 void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
-       ukvm_gpa_t *p_entry, ukvm_gpa_t *p_end)
+       ukvm_gpa_t *p_entry, ukvm_gpa_t *p_end, uint8_t *buf)
 {
-    int fd_kernel;
+    int fd_kernel = 0;
     ssize_t numb;
     size_t buflen;
     Elf64_Off ph_off;
@@ -105,11 +104,17 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     /* highest byte of the program (on physical memory) */
     *p_end = 0;
 
-    fd_kernel = open(file, O_RDONLY);
-    if (fd_kernel == -1)
-        err(1, "Failed open");
+    if (!buf) {
+        fd_kernel = open(file, O_RDONLY);
+        if (fd_kernel == -1)
+            err(1, "Failed open");
+    }
 
-    numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf64_Ehdr), 0);
+    if (buf) {
+        memmove(&hdr, buf, sizeof(Elf64_Ehdr));
+        numb = sizeof(Elf64_Ehdr);
+    } else
+        numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf64_Ehdr), 0);
     if (numb < 0)
         err(1, "Failed header read");
     if (numb != sizeof(Elf64_Ehdr))
@@ -139,7 +144,11 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     phdr = malloc(buflen);
     if (!phdr)
         err(1, "Failed malloc");
-    numb = pread_in_full(fd_kernel, phdr, buflen, ph_off);
+    if (buf) {
+        memmove(phdr, buf + ph_off, buflen);
+        numb = buflen;
+    } else
+        numb = pread_in_full(fd_kernel, phdr, buflen, ph_off);
     if (numb < 0)
         err(1, "Failed section header read");
     if (numb != buflen)
@@ -186,7 +195,11 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
             *p_end = _end;
 
         daddr = mem + paddr;
-        numb = pread_in_full(fd_kernel, daddr, filesz, offset);
+        if (buf) {
+            memmove(daddr, buf + offset, filesz);
+            numb = filesz;
+        } else
+            numb = pread_in_full(fd_kernel, daddr, filesz, offset);
         if (numb < 0)
             err(1, "Failed section read");
         if (numb != filesz)
