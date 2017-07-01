@@ -89,20 +89,22 @@ static int rdtsc_init_traps(struct ukvm_hv *hv)
 
             SLIST_INSERT_HEAD(&traps, trap, entries);
 
-#ifdef RR_DO_CHECKS
-            printf("%s -- mnemonic=%d off=%"PRIx64" len=%u\n",
-                   ud_insn_asm(&ud_obj), ud_insn_mnemonic(&ud_obj),
-                   ud_insn_off(&ud_obj), ud_insn_len(&ud_obj));
-#endif
         }
     }
 
     SLIST_FOREACH(trap, &traps, entries) {
-        uint8_t *addr = hv->mem + trap->insn_off;
+        uint8_t *addr = UKVM_CHECKED_GPA_P(hv, trap->insn_off, trap->insn_len);
         int i;
+
+#ifdef RR_DO_CHECKS
+        printf("mnemonic=%d off=%"PRIx64" len=%u\n",
+               trap->insn_mnemonic,
+               trap->insn_off, trap->insn_len);
+#endif
+
         /* We replace the first byte with an int3, which traps */
         addr[0] = 0xcc; /* int3 */
-        for (i = 0; i < trap->insn_len; i++)
+        for (i = 1; i < trap->insn_len; i++)
             addr[i] = 0x90; /* nop */
     }
 
@@ -132,8 +134,8 @@ static void rdtsc_emulate(struct ukvm_hv *hv)
 
     RR_OUTPUT(hv, rdtsc, &tscval);
     
-    regs.rax = tscval & 0xffffffff;
-    regs.rdx = (tscval >> 32) & 0xffffffff;
+    regs.rax = tscval & ~0ULL;
+    regs.rdx = (tscval >> 32) & ~0ULL;
     regs.rip += 2;
     
     ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
