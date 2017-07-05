@@ -108,13 +108,13 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
 
     fd_kernel = open(file, O_RDONLY);
     if (fd_kernel == -1)
-        goto out_error;
+        err(1, "Failed open");
 
     numb = pread_in_full(fd_kernel, &hdr, sizeof(Elf64_Ehdr), 0);
     if (numb < 0)
-        goto out_error;
+        err(1, "Failed header read");
     if (numb != sizeof(Elf64_Ehdr))
-        goto out_invalid;
+        err(1, "Invalid Elf64 header size");
 
     /*
      * Validate program is in ELF64 format:
@@ -130,7 +130,7 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
             || hdr.e_ident[EI_CLASS] != ELFCLASS64
             || hdr.e_type != ET_EXEC
             || hdr.e_machine != EM_X86_64)
-        goto out_invalid;
+        err(1, "Invalid Elf64 header");
 
     ph_off = hdr.e_phoff;
     ph_entsz = hdr.e_phentsize;
@@ -139,12 +139,12 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
 
     phdr = malloc(buflen);
     if (!phdr)
-        goto out_error;
+        err(1, "Failed malloc");
     numb = pread_in_full(fd_kernel, phdr, buflen, ph_off);
     if (numb < 0)
-        goto out_error;
+        err(1, "Failed section header read");
     if (numb != buflen)
-        goto out_invalid;
+        err(1, "Failed section header read (invalid size)");
 
     /*
      * Load all segments with the LOAD directive from the elf file at offset
@@ -168,9 +168,9 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
 
         if ((paddr >= mem_size) || add_overflow(paddr, filesz, result)
                 || (result >= mem_size))
-            goto out_invalid;
+            errx(1, "Invalid section size, check #1");
         if (add_overflow(paddr, memsz, result) || (result >= mem_size))
-            goto out_invalid;
+            errx(1, "Invalid section size, check #2");
         /*
          * Verify that align is a non-zero power of 2 and safely compute
          * ((_end + (align - 1)) & -align).
@@ -191,9 +191,9 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         daddr = mem + paddr;
         numb = pread_in_full(fd_kernel, daddr, filesz, offset);
         if (numb < 0)
-            goto out_error;
+            err(1, "Failed section read");
         if (numb != filesz)
-            goto out_invalid;
+            err(1, "Failed section read (invalid size)");
         memset(daddr + filesz, 0, memsz - filesz);
 
         prot = PROT_NONE;
@@ -206,17 +206,21 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
         if (prot & PROT_WRITE && prot & PROT_EXEC)
             warnx("%s: Warning: phdr[%u] requests WRITE and EXEC permissions",
                   file, ph_i);
-        if (mprotect(daddr, _end - paddr, prot) == -1)
-            goto out_error;
+        /*
+	 * The address has to be page aligned. So, if the region starts
+	 * unaligned, we mprotect the bits before it, at a page boundary. This
+	 * might result in a crash, but that might be better than not protect
+	 * that first part.
+         */
+        if (mprotect((void *)((uint64_t)daddr & ~0xfff),
+                     _end - paddr, prot) == -1)
+            err(1, "Failed mprotect");
     }
 
     free (phdr);
     close (fd_kernel);
     *p_entry = hdr.e_entry;
     return;
-
-out_error:
-    err(1, "%s", file);
 
 out_invalid:
     errx(1, "%s: Exec format error", file);
