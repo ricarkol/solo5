@@ -637,8 +637,10 @@ repeat:
 
         case 'A':
             flags |= UPPERCASE;
+goto fallthrough_a;
 
         case 'a':
+fallthrough_a:
             if (qualifier == 'l')
                 out_eaddr(&out, va_arg(args, unsigned char *),
                           field_width, precision, flags);
@@ -654,8 +656,10 @@ repeat:
 
         case 'X':
             flags |= UPPERCASE;
+goto fallthrough_x;
 
         case 'x':
+fallthrough_x:
             base = 16;
             break;
 

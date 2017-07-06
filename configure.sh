@@ -68,7 +68,7 @@ HOST_INCDIR=${PWD}/include-host
 case $(uname -s) in
     Linux)
         # On Linux/gcc we use -nostdinc and copy all the gcc-provided headers.
-        cc_is_gcc || die "Only 'gcc' 4.x+ is supported on Linux"
+	CC=gcc
         CC_INCDIR=$(${CC} -print-file-name=include)
         [ -d "${CC_INCDIR}" ] || die "Cannot determine gcc include directory"
         mkdir -p ${HOST_INCDIR}

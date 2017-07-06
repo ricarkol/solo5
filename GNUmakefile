@@ -26,6 +26,19 @@ all: ukvm virtio muen
 .DEFAULT_GOAL := all
 .NOTPARALLEL: ukvm virtio muen
 
+.PHONY: build
+build: all
+	mkdir -p build/${TARGET_ARCH}/ukvm
+	cp kernel/ukvm/solo5.o build/${TARGET_ARCH}/ukvm/solo5.o
+	cp ukvm/ukvm-bin build/${TARGET_ARCH}/ukvm/ukvm-bin
+	mkdir -p build/${TARGET_ARCH}/virtio
+	cp kernel/virtio/solo5.o build/${TARGET_ARCH}/virtio/solo5.o
+	mkdir -p build/${TARGET_ARCH}/muen
+	cp kernel/virtio/solo5.o build/${TARGET_ARCH}/muen/solo5.o
+	mkdir -p build/include
+	cp kernel/solo5.h build/include/.
+
+
 .PHONY: virtio
 virtio:
 ifeq ($(BUILD_VIRTIO), yes)
@@ -59,6 +72,8 @@ endif
 	$(RM) solo5-kernel-ukvm.pc
 	$(RM) solo5-kernel-muen.pc
 	$(RM) -r include-host/
+	$(RM) -rf build
+	$(RM) -rf include
 	$(RM) Makeconf
 
 PREFIX?=/nonexistent # Fail if not run from OPAM
