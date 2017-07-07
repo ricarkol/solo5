@@ -97,7 +97,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 static int rdtsc_init_traps(struct ukvm_hv *hv)
 {
     struct kvm_guest_debug dbg = {0};
-    struct trap_t *trap;
 
     /* This disassemble takes ~5ms */
     ud_t ud_obj;
@@ -109,31 +108,33 @@ static int rdtsc_init_traps(struct ukvm_hv *hv)
     ud_set_syntax(&ud_obj, UD_SYN_INTEL);
 
     while (ud_disassemble(&ud_obj)) {
-        if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc) {
-            trap = malloc(sizeof (struct trap_t));
+        if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc ||
+            ud_insn_mnemonic(&ud_obj) == UD_Irdrand) {
+            struct trap_t *trap;
+            int i;
+
+            trap = malloc(sizeof(struct trap_t));
             assert(trap);
+            memset(trap, 0, sizeof(struct trap_t));
             trap->insn_off = ud_insn_off(&ud_obj);
             trap->insn_mnemonic = ud_insn_mnemonic(&ud_obj);
             trap->insn_len = ud_insn_len(&ud_obj);
 
-            SLIST_INSERT_HEAD(&traps, trap, entries);
-        }
-    }
-
-    SLIST_FOREACH(trap, &traps, entries) {
-        uint8_t *addr = UKVM_CHECKED_GPA_P(hv, trap->insn_off, trap->insn_len);
-        int i;
-
 #ifdef RR_DO_CHECKS
-        printf("mnemonic=%d off=%"PRIx64" len=%u\n",
-               trap->insn_mnemonic,
-               trap->insn_off, trap->insn_len);
+            printf("mnemonic=%s off=%"PRIx64" len=%u\n",
+                   ud_insn_asm(&ud_obj),
+                   trap->insn_off, trap->insn_len);
 #endif
 
-        /* We replace the first byte with an int3, which traps */
-        addr[0] = 0xcc; /* int3 */
-        for (i = 1; i < trap->insn_len; i++)
-            addr[i] = 0x90; /* nop */
+            /* We replace the first byte with an int3, which traps */
+            uint8_t *addr = UKVM_CHECKED_GPA_P(hv, trap->insn_off,
+                                               trap->insn_len);
+            addr[0] = 0xcc; /* int3 */
+            for (i = 1; i < trap->insn_len; i++)
+                addr[i] = 0x90; /* nop */
+
+            SLIST_INSERT_HEAD(&traps, trap, entries);
+        }
     }
 
     dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
@@ -145,7 +146,7 @@ static int rdtsc_init_traps(struct ukvm_hv *hv)
 
     return 0;
 }
-static void rdtsc_emulate(struct ukvm_hv *hv)
+static void rdtsc_emulate(struct ukvm_hv *hv, int len)
 {
     uint64_t tscval = 0;
     uint32_t eax, edx;
@@ -164,11 +165,60 @@ static void rdtsc_emulate(struct ukvm_hv *hv)
     
     regs.rax = tscval & ~0ULL;
     regs.rdx = (tscval >> 32) & ~0ULL;
-    regs.rip += 2;
+    regs.rip += len;
     
     ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
     assert(ret == 0);
 }
+
+static void rdrand_emulate(struct ukvm_hv *hv, int len)
+{
+    uint64_t randval = 0;
+    struct kvm_regs regs;
+    int ret;
+
+/*
+IF HW_RND_GEN.ready = 1
+    THEN
+         CASE of
+              osize is 64: DEST[63:0] <- HW_RND_GEN.data;
+              osize is 32: DEST[31:0] <- HW_RND_GEN.data;
+              osize is 16: DEST[15:0] <- HW_RND_GEN.data;
+         ESAC
+         CF <- 1;
+    ELSE
+         CASE of
+              osize is 64: DEST[63:0] <- 0;
+              osize is 32: DEST[31:0] <- 0;
+              osize is 16: DEST[15:0] <- 0;
+         ESAC
+         CF <- 0;
+FI
+OF, SF, ZF, AF, PF <- 0;
+*/
+
+    ret = ioctl(hv->b->vcpufd, KVM_GET_REGS, &regs);
+    assert(ret == 0);
+
+    RR_INPUT(hv, rdrand, &randval);
+
+    randval = 1;
+    
+    RR_OUTPUT(hv, rdrand, &randval);
+
+    regs.rcx = randval;
+    regs.rflags |= 1; // CF
+    regs.rflags &= ~(1 << 11); // OF
+    regs.rflags &= ~(1 << 7); // SF
+    regs.rflags &= ~(1 << 6); // ZF
+    regs.rflags &= ~(1 << 4); // AF
+    regs.rflags &= ~(1 << 2); // PF
+    regs.rip += len;
+    
+    ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
+    assert(ret == 0);
+}
+
 
 static int rr_init(char *rr_file)
 {
@@ -321,19 +371,20 @@ void rr_ukvm_cpuid(struct ukvm_hv *hv, struct ukvm_cpuid *o, int loc)
 
     HEAVY_CHECKS_OUT();
 }
-void rr_ukvm_rdrand(struct platform *p, uint64_t *r, int loc)
+#endif
+
+void rr_ukvm_rdrand(struct ukvm_hv *hv, uint64_t *randval, int loc)
 {
     HEAVY_CHECKS_IN();
     
-    RR(loc, &*r, sizeof(*r));
+    RR(loc, &*randval, sizeof(*randval));
 
     HEAVY_CHECKS_OUT();
 }
-#endif
 
 static int handle_vmexits(struct ukvm_hv *hv)
 {
-    /* if it's not an int3 for a rdtsc, let the vcpu loop do it */
+    /* if it's not an int3 for a rdtsc or rdrand, let the vcpu loop do it */
     if (hv->b->vcpurun->exit_reason != KVM_EXIT_DEBUG)
         return -1;
 
@@ -346,7 +397,19 @@ static int handle_vmexits(struct ukvm_hv *hv)
 
     SLIST_FOREACH(trap, &traps, entries) {
         if (trap->insn_off == regs.rip) {
-            rdtsc_emulate(hv);
+            switch (trap->insn_mnemonic) {
+            case UD_Irdtsc:
+                printf("emulate rdtsc at %p %d\n", (void *)trap->insn_off, trap->insn_len);
+                rdtsc_emulate(hv, trap->insn_len);
+                break;
+            case UD_Irdrand:
+                printf("emulate rdrand at %p %d\n", (void *)trap->insn_off, trap->insn_len);
+                rdrand_emulate(hv, trap->insn_len);
+                printf("DONE with rdrand emulation\n");
+                break;
+            default:
+                errx(1, "Unhandled mnemonic");
+            }
             return 0;
         }
     }
