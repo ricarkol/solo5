@@ -66,9 +66,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
             errx(1, "asking for %s and trace has %s\n", func, buf);
 #endif
         ret = read(rr_fd, x, sz);
-        //printf("asking for %s and trace has %s val=%llu sz=%zu\n", func, buf, *((unsigned long long *)x), sz);
-        //if (strcmp(buf, func) != 0)
-        //    errx(1, "asking for %s and trace has %s\n", func, buf);
         if (ret == 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
@@ -214,7 +211,7 @@ OF, SF, ZF, AF, PF <- 0;
     regs.rflags &= ~(1 << 4); // AF
     regs.rflags &= ~(1 << 2); // PF
     regs.rip += len;
-    
+
     ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
     assert(ret == 0);
 }
@@ -399,13 +396,10 @@ static int handle_vmexits(struct ukvm_hv *hv)
         if (trap->insn_off == regs.rip) {
             switch (trap->insn_mnemonic) {
             case UD_Irdtsc:
-                printf("emulate rdtsc at %p %d\n", (void *)trap->insn_off, trap->insn_len);
                 rdtsc_emulate(hv, trap->insn_len);
                 break;
             case UD_Irdrand:
-                printf("emulate rdrand at %p %d\n", (void *)trap->insn_off, trap->insn_len);
                 rdrand_emulate(hv, trap->insn_len);
-                printf("DONE with rdrand emulation\n");
                 break;
             default:
                 errx(1, "Unhandled mnemonic");
