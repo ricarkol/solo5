@@ -21,6 +21,8 @@
 #include "ukvm_hv_kvm.h"
 #include "ukvm_rr.h"
 
+#define RR_MAGIC   0xff50505f
+#define RR_MAGIC_CHECKS
 
 #define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
@@ -46,23 +48,50 @@ static struct traps_head traps;
 int rr_mode = RR_MODE_NONE;
 static int rr_fd;
 
-void rr(uint8_t *x, size_t sz, int l, const char *func, int line)
+void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
     int ret;
     if ((l == RR_LOC_IN) && (rr_mode == RR_MODE_REPLAY)) {
+#ifdef RR_MAGIC_CHECKS
+        uint32_t magic;
+        char buf[56];
+        ret = read(rr_fd, &magic, 4);
+        if (ret == 0)
+            errx(0, "Reached end of replay\n");
+        assert(magic == RR_MAGIC);
+        ret = read(rr_fd, buf, 56);
+        if (ret == 0)
+            errx(0, "Reached end of replay\n");
+        if (strcmp(buf, func) != 0)
+            errx(1, "asking for %s and trace has %s\n", func, buf);
+#endif
         ret = read(rr_fd, x, sz);
+        //printf("asking for %s and trace has %s val=%llu sz=%zu\n", func, buf, *((unsigned long long *)x), sz);
+        //if (strcmp(buf, func) != 0)
+        //    errx(1, "asking for %s and trace has %s\n", func, buf);
         if (ret == 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
+#ifdef RR_MAGIC_CHECKS
+        uint32_t magic;
+        char buf[56];
+        magic = RR_MAGIC;
+        ret = write(rr_fd, &magic, 4);
+        assert(ret == 4);
+        sprintf(buf, "%s", func);
+        ret = write(rr_fd, buf, 56);
+        assert(ret == 56);
+        printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+#endif
         ret = write(rr_fd, x, sz);
         assert(ret == sz);
     }
 }
 
 #define RR(l, x, s) do {                                        \
-        rr((uint8_t *)(x), s, l, __FUNCTION__, __LINE__);       \
+        rr(l, (uint8_t *)(x), s, __FUNCTION__, __LINE__);       \
     } while (0)
 
 static int rdtsc_init_traps(struct ukvm_hv *hv)
@@ -88,7 +117,6 @@ static int rdtsc_init_traps(struct ukvm_hv *hv)
             trap->insn_len = ud_insn_len(&ud_obj);
 
             SLIST_INSERT_HEAD(&traps, trap, entries);
-
         }
     }
 
@@ -167,7 +195,7 @@ void rr_ukvm_walltime(struct ukvm_hv *hv, struct ukvm_walltime *o, int loc)
 {
     HEAVY_CHECKS_IN();
     
-	RR(loc, &o->nsecs, sizeof(o->nsecs));
+    RR(loc, &o->nsecs, sizeof(o->nsecs));
 
     HEAVY_CHECKS_OUT();
 }
@@ -217,7 +245,7 @@ void rr_ukvm_netwrite(struct ukvm_hv *hv, struct ukvm_netwrite *o, int loc)
     CHECK(loc, &o->data, sizeof(o->data));
     CHECK(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), o->len);
     CHECK(loc, &o->len, sizeof(o->len));
-	RR(loc, &o->ret, sizeof(o->ret));
+    RR(loc, &o->ret, sizeof(o->ret));
 
     HEAVY_CHECKS_OUT();
 }
@@ -226,9 +254,10 @@ void rr_ukvm_netread(struct ukvm_hv *hv, struct ukvm_netread *o, int loc)
     HEAVY_CHECKS_IN();
 
     CHECK(loc, &o->data, sizeof(o->data));
-	RR(loc, &o->len, sizeof(o->len));
-    RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), o->len);
-	RR(loc, &o->ret, sizeof(o->ret));
+    RR(loc, &o->len, sizeof(o->len));
+    //RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), o->len);
+    RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), 2000); // XXX check this
+    RR(loc, &o->ret, sizeof(o->ret));
 
     HEAVY_CHECKS_OUT();
 }
@@ -249,7 +278,7 @@ void rr_ukvm_blkinfo(struct ukvm_hv *hv, struct ukvm_blkinfo *o, int loc)
 {
     HEAVY_CHECKS_IN();
     
-	RR(loc, &o->sector_size, sizeof(o->sector_size));
+    RR(loc, &o->sector_size, sizeof(o->sector_size));
     RR(loc, &o->num_sectors, sizeof(o->num_sectors));
     RR(loc, &o->rw, sizeof(o->rw));
 
@@ -273,9 +302,9 @@ void rr_ukvm_blkread(struct ukvm_hv *hv, struct ukvm_blkread *o, int loc)
     
     CHECK(loc, &o->sector, sizeof(o->sector));
     CHECK(loc, &o->data, sizeof(o->data));
-	RR(loc, &o->len, sizeof(o->len));
+    RR(loc, &o->len, sizeof(o->len));
     RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), o->len);
-	RR(loc, &o->ret, sizeof(o->ret));
+    RR(loc, &o->ret, sizeof(o->ret));
 
     HEAVY_CHECKS_OUT();
 }
@@ -284,7 +313,7 @@ void rr_ukvm_cpuid(struct ukvm_hv *hv, struct ukvm_cpuid *o, int loc)
 {
     HEAVY_CHECKS_IN();
     
-	CHECK(loc, &o->code, sizeof(o->code));
+    CHECK(loc, &o->code, sizeof(o->code));
     RR(loc, &o->eax, sizeof(o->eax));
     RR(loc, &o->ebx, sizeof(o->ebx));
     RR(loc, &o->ecx, sizeof(o->ecx));
