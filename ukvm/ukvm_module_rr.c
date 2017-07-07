@@ -202,7 +202,7 @@ OF, SF, ZF, AF, PF <- 0;
 
     RR_INPUT(hv, rdrand, &randval);
 
-    randval = 1;
+    randval = 1234ULL;
     
     RR_OUTPUT(hv, rdrand, &randval);
 
