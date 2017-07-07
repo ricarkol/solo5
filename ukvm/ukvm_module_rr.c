@@ -106,7 +106,8 @@ static int rdtsc_init_traps(struct ukvm_hv *hv)
 
     while (ud_disassemble(&ud_obj)) {
         if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc ||
-            ud_insn_mnemonic(&ud_obj) == UD_Irdrand) {
+            ud_insn_mnemonic(&ud_obj) == UD_Irdrand ||
+            ud_insn_mnemonic(&ud_obj) == UD_Icpuid) {
             struct trap_t *trap;
             int i;
 
@@ -143,6 +144,7 @@ static int rdtsc_init_traps(struct ukvm_hv *hv)
 
     return 0;
 }
+
 static void rdtsc_emulate(struct ukvm_hv *hv, int len)
 {
     uint64_t tscval = 0;
@@ -216,6 +218,37 @@ OF, SF, ZF, AF, PF <- 0;
     assert(ret == 0);
 }
 
+static void cpuid_emulate(struct ukvm_hv *hv, int len)
+{
+    struct cpuid_t cpuid;
+    struct kvm_regs regs;
+    int ret;
+    
+    ret = ioctl(hv->b->vcpufd, KVM_GET_REGS, &regs);
+    assert(ret == 0);
+
+    cpuid.code = regs.rax;
+    cpuid.eax = cpuid.ebx = cpuid.ecx = cpuid.edx = 0;
+
+    RR_INPUT(hv, cpuid, &cpuid);
+
+    __asm__ volatile("cpuid"
+                     :"=a"(cpuid.eax),"=b"(cpuid.ebx),
+                     "=c"(cpuid.ecx),"=d"(cpuid.edx)
+                     :"a"((uint32_t)cpuid.code));   
+
+    RR_OUTPUT(hv, cpuid, &cpuid);
+    
+    regs.rax = cpuid.eax;
+    regs.rbx = cpuid.ebx;
+    regs.rcx = cpuid.ecx;
+    regs.rdx = cpuid.edx;
+
+    regs.rip += len;
+    
+    ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
+    assert(ret == 0);
+}
 
 static int rr_init(char *rr_file)
 {
@@ -343,6 +376,7 @@ void rr_ukvm_blkwrite(struct ukvm_hv *hv, struct ukvm_blkwrite *o, int loc)
 
     HEAVY_CHECKS_OUT();
 }
+
 void rr_ukvm_blkread(struct ukvm_hv *hv, struct ukvm_blkread *o, int loc)
 {
     HEAVY_CHECKS_IN();
@@ -355,8 +389,8 @@ void rr_ukvm_blkread(struct ukvm_hv *hv, struct ukvm_blkread *o, int loc)
 
     HEAVY_CHECKS_OUT();
 }
-#if 0
-void rr_ukvm_cpuid(struct ukvm_hv *hv, struct ukvm_cpuid *o, int loc)
+
+void rr_ukvm_cpuid(struct ukvm_hv *hv, struct cpuid_t *o, int loc)
 {
     HEAVY_CHECKS_IN();
     
@@ -368,7 +402,6 @@ void rr_ukvm_cpuid(struct ukvm_hv *hv, struct ukvm_cpuid *o, int loc)
 
     HEAVY_CHECKS_OUT();
 }
-#endif
 
 void rr_ukvm_rdrand(struct ukvm_hv *hv, uint64_t *randval, int loc)
 {
@@ -398,9 +431,15 @@ static int handle_vmexits(struct ukvm_hv *hv)
             case UD_Irdtsc:
                 rdtsc_emulate(hv, trap->insn_len);
                 break;
+
             case UD_Irdrand:
                 rdrand_emulate(hv, trap->insn_len);
                 break;
+
+            case UD_Icpuid:
+                cpuid_emulate(hv, trap->insn_len);
+                break;
+
             default:
                 errx(1, "Unhandled mnemonic");
             }

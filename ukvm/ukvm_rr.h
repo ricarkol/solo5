@@ -13,6 +13,14 @@ enum {
 
 extern int rr_mode;
 
+struct cpuid_t {
+    uint64_t code;
+    uint64_t eax;
+    uint64_t ebx;
+    uint64_t ecx;
+    uint64_t edx;
+};
+
 void rr_ukvm_puts(struct ukvm_hv *hv, struct ukvm_puts *o, int loc);
 void rr_ukvm_boot_info(struct ukvm_hv *hv, struct ukvm_boot_info *o, int loc);
 void rr_ukvm_blkinfo(struct ukvm_hv *hv, struct ukvm_blkinfo *o, int loc);
@@ -25,6 +33,7 @@ void rr_ukvm_poll(struct ukvm_hv *hv, struct ukvm_poll *o, int loc);
 void rr_ukvm_walltime(struct ukvm_hv *hv, struct ukvm_walltime *o, int loc);
 void rr_ukvm_rdtsc(struct ukvm_hv *hv, uint64_t *new_tsc, int loc);
 void rr_ukvm_rdrand(struct ukvm_hv *hv, uint64_t *r, int loc);
+void rr_ukvm_cpuid(struct ukvm_hv *hv, struct cpuid_t *cpuid, int loc);
 
 /* RR_INPUT or RR_INPUT_REDO
  *    (struct name, pointer to struct, offset for any data ptrs) 
