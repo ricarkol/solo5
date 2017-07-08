@@ -91,7 +91,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         rr(l, (uint8_t *)(x), s, __FUNCTION__, __LINE__);       \
     } while (0)
 
-static int rdtsc_init_traps(struct ukvm_hv *hv)
+static int init_traps(struct ukvm_hv *hv)
 {
     struct kvm_guest_debug dbg = {0};
 
@@ -235,7 +235,7 @@ static void cpuid_emulate(struct ukvm_hv *hv, int len)
     __asm__ volatile("cpuid"
                      :"=a"(cpuid.eax),"=b"(cpuid.ebx),
                      "=c"(cpuid.ecx),"=d"(cpuid.edx)
-                     :"a"((uint32_t)cpuid.code));   
+                     :"a"((uint32_t)cpuid.code));
 
     RR_OUTPUT(hv, cpuid, &cpuid);
     
@@ -469,8 +469,7 @@ static int setup(struct ukvm_hv *hv)
 
     rr_init("rr_out.dat");
     
-    /* XXX should rdtsc trapping/emulation be its own module? */
-    ret = rdtsc_init_traps(hv);
+    ret = init_traps(hv);
     assert(ret == 0);
     /* for rdtsc traps, we need to handle int3s */
     ret = ukvm_core_register_vmexit(handle_vmexits);
