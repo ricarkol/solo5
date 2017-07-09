@@ -35,9 +35,10 @@
 #endif
 
 struct trap_t {
-    ukvm_gpa_t    insn_off;      /* Instruction offset (address) */
-    int           insn_mnemonic; /* Really an enum ud_mnemonic_code */
-    int           insn_len;      /* Instruction length in bytes */
+    ukvm_gpa_t    insn_off;        /* Instruction offset (address) */
+    int           insn_mnemonic;   /* Really an enum ud_mnemonic_code */
+    int           insn_len;        /* Instruction length in bytes */
+    ud_operand_t  insn_opr[2];     /* Instruction operands (max 2) */
 
     SLIST_ENTRY(trap_t) entries;
 };
@@ -117,6 +118,10 @@ static int init_traps(struct ukvm_hv *hv)
             trap->insn_off = ud_insn_off(&ud_obj);
             trap->insn_mnemonic = ud_insn_mnemonic(&ud_obj);
             trap->insn_len = ud_insn_len(&ud_obj);
+            if (ud_insn_opr(&ud_obj, 0))
+                trap->insn_opr[0] = *ud_insn_opr(&ud_obj, 0);
+            if (ud_insn_opr(&ud_obj, 1))
+                trap->insn_opr[1] = *ud_insn_opr(&ud_obj, 1);
 
 #ifdef RR_DO_CHECKS
             printf("mnemonic=%s off=%"PRIx64" len=%u\n",
@@ -145,7 +150,7 @@ static int init_traps(struct ukvm_hv *hv)
     return 0;
 }
 
-static void rdtsc_emulate(struct ukvm_hv *hv, int len)
+static void rdtsc_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 {
     uint64_t tscval = 0;
     uint32_t eax, edx;
@@ -164,13 +169,13 @@ static void rdtsc_emulate(struct ukvm_hv *hv, int len)
     
     regs.rax = tscval & ~0ULL;
     regs.rdx = (tscval >> 32) & ~0ULL;
-    regs.rip += len;
+    regs.rip += trap->insn_len;
     
     ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
     assert(ret == 0);
 }
 
-static void rdrand_emulate(struct ukvm_hv *hv, int len)
+static void rdrand_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 {
     uint64_t randval = 0;
     struct kvm_regs regs;
@@ -205,20 +210,43 @@ OF, SF, ZF, AF, PF <- 0;
     
     RR_OUTPUT(hv, rdrand, &randval);
 
-    regs.rcx = randval;
+    assert(trap->insn_opr[0].size == 64);
+    assert(trap->insn_opr[0].type == UD_OP_REG);
+
+    switch (trap->insn_opr[0].base) {
+    case UD_R_RAX:
+        regs.rax = randval;
+        break;
+
+    case UD_R_RBX:
+        regs.rbx = randval;
+        break;
+
+    case UD_R_RCX:
+        regs.rcx = randval;
+        break;
+
+    case UD_R_RDX:
+        regs.rdx = randval;
+        break;
+
+    default:
+        errx(1, "unexpected rdrand register");
+    }
+
     regs.rflags |= 1; // CF
     regs.rflags &= ~(1 << 11); // OF
     regs.rflags &= ~(1 << 7); // SF
     regs.rflags &= ~(1 << 6); // ZF
     regs.rflags &= ~(1 << 4); // AF
     regs.rflags &= ~(1 << 2); // PF
-    regs.rip += len;
+    regs.rip += trap->insn_len;
 
     ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
     assert(ret == 0);
 }
 
-static void cpuid_emulate(struct ukvm_hv *hv, int len)
+static void cpuid_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 {
     struct cpuid_t cpuid;
     struct kvm_regs regs;
@@ -243,8 +271,7 @@ static void cpuid_emulate(struct ukvm_hv *hv, int len)
     regs.rbx = cpuid.ebx;
     regs.rcx = cpuid.ecx;
     regs.rdx = cpuid.edx;
-
-    regs.rip += len;
+    regs.rip += trap->insn_len;
     
     ret = ioctl(hv->b->vcpufd, KVM_SET_REGS, &regs);
     assert(ret == 0);
@@ -429,15 +456,15 @@ static int handle_vmexits(struct ukvm_hv *hv)
         if (trap->insn_off == regs.rip) {
             switch (trap->insn_mnemonic) {
             case UD_Irdtsc:
-                rdtsc_emulate(hv, trap->insn_len);
+                rdtsc_emulate(hv, trap);
                 break;
 
             case UD_Irdrand:
-                rdrand_emulate(hv, trap->insn_len);
+                rdrand_emulate(hv, trap);
                 break;
 
             case UD_Icpuid:
-                cpuid_emulate(hv, trap->insn_len);
+                cpuid_emulate(hv, trap);
                 break;
 
             default:
