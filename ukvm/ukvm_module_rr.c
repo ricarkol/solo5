@@ -13,9 +13,9 @@
 
 #include <zlib.h>
 #include <linux/kvm.h>
-#include <udis86.h>
 
 #include "queue.h"
+#include "libudis86/udis86.h"
 
 #include "ukvm.h"
 #include "ukvm_hv_kvm.h"
