@@ -114,6 +114,8 @@ void heavy_check_checks(FILE *fp, struct ukvm_hv *hv, const char *func)
     
     memset(check_buf, 0, CHK_BUF_SZ);
     ret = fscanf(fp, "function: %s\n", check_buf);
+    if (ret == EOF)
+        return;
     assert(ret == 1);
     if (memcmp(check_buf, func, strlen(func)))
         printf("out of order execution detected: got %s, expected %s\n",
@@ -122,15 +124,21 @@ void heavy_check_checks(FILE *fp, struct ukvm_hv *hv, const char *func)
     
     if (regs.rip == BUG_ADDR) {
         ret = fscanf(fp, "memory: ");
+        if (ret == EOF)
+            return;
         assert(ret == 0);
         for (i = 0; i < hv->mem_size; i++) {
             uint32_t val;
             ret = fscanf(fp, "%02x", &val);
+            if (ret == EOF)
+                return;
             assert(ret == 1);
             if (hv->mem[i] != val)
                 printf("%08x %02x -> %02x\n", i, val, hv->mem[i]);
         }
         ret = fscanf(fp, "\n");
+        if (ret == EOF)
+            return;
         assert(ret == 0);
     }
     
@@ -201,6 +209,8 @@ void heavy_check_checks(FILE *fp, struct ukvm_hv *hv, const char *func)
     
     uint32_t ccrc;
     ret = fscanf(fp, "crc: 0x%x\n", &ccrc);
+    if (ret == EOF)
+        return;
     assert(ret == 1);
     uint32_t crc = do_crc32(hv->mem, hv->mem_size);
     fprintf(pfile, "crc: 0x%x\n", crc);
@@ -319,6 +329,8 @@ void check_checks(uint8_t *buf, size_t sz, const char *func, int line) {
     }
     memset(check_buf, 0, CHK_BUF_SZ);
     ret = fscanf(cfile, "%zu %s %d ", &c_sz, check_buf, &c_line);
+    if (ret == EOF)
+        return;
     assert(ret == 3);
     if ((c_line != line) || memcmp(check_buf, func, strlen(func))) {
         printf("out of order execution detected!!!!\n");
@@ -330,10 +342,14 @@ void check_checks(uint8_t *buf, size_t sz, const char *func, int line) {
     for (i = 0; i < sz; i++) {
         uint32_t c;
         ret = fscanf(cfile, "%02x", &c);
+        if (ret == EOF)
+            return;
         assert(ret == 1);
         assert(c == buf[i]);
     }
     ret = fscanf(cfile, "\n");
+    if (ret == EOF)
+        return;
     assert(ret == 0);
 }
 
