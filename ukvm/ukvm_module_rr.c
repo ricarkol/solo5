@@ -22,10 +22,10 @@
 #include "ukvm_rr.h"
 
 #define RR_MAGIC   0xff50505f
-#define RR_MAGIC_CHECKS
 
 #define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
+#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
 #else
 #define HEAVY_CHECKS_IN(f) do{}while(0)
