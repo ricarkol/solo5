@@ -111,8 +111,6 @@ static void hypercall_exec(struct ukvm_hv *hv, ukvm_gpa_t gpa)
     struct ukvm_exec *p =
         UKVM_CHECKED_GPA_P(hv, gpa, sizeof (struct ukvm_exec));
 
-    printf("\n\nsolo5_exec\n\n");
-    
     ukvm_gpa_t gpa_ep, gpa_kend;
 
     /* Need to remove the protection, so we can load it with a new elf */
