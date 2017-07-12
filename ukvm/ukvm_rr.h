@@ -35,6 +35,8 @@ void rr_ukvm_rdtsc(struct ukvm_hv *hv, uint64_t *new_tsc, int loc);
 void rr_ukvm_rdrand(struct ukvm_hv *hv, uint64_t *r, int loc);
 void rr_ukvm_cpuid(struct ukvm_hv *hv, struct cpuid_t *cpuid, int loc);
 
+#ifdef UKVM_MODULE_RR
+
 /* RR_INPUT or RR_INPUT_REDO
  *    (struct name, pointer to struct, offset for any data ptrs) 
  *    Redo re-performs the function (e.g., for console out) 
@@ -56,5 +58,11 @@ void rr_ukvm_cpuid(struct ukvm_hv *hv, struct cpuid_t *cpuid, int loc);
             rr_ukvm_##s(p, o, RR_LOC_OUT);                  \
         }                                                   \
     } while (0)
+
+#else
+#define RR_INPUT_REDO(p,s,o)
+#define RR_INPUT(p,s,o)
+#define RR_OUTPUT(p,s,o)
+#endif // UKVM_MODULE_RR
 
 #endif
