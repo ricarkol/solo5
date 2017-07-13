@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -21,9 +22,11 @@
 #include "ukvm_hv_kvm.h"
 #include "ukvm_rr.h"
 
+#include <fcntl.h>
+
 #define RR_MAGIC   0xff50505f
 
-#define RR_DO_CHECKS
+//#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 #define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -281,10 +284,14 @@ static void cpuid_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 static int rr_init(char *rr_file)
 {
     CHECKS_INIT();
+    char * myfifo = "/tmp/myfifo";
     
     switch (rr_mode) {
     case RR_MODE_RECORD: {
-        rr_fd = open(rr_file, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+        //rr_fd = open(rr_file, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+        mkfifo(myfifo, 0666);
+        rr_fd = open(myfifo, O_WRONLY);
+        assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
         break;
     }
     case RR_MODE_REPLAY: {

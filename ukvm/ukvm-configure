@@ -80,7 +80,7 @@ add_module ()
 
 UKVM_CFLAGS=
 UKVM_LDFLAGS=
-UKVM_LDLIBS="-lz ${UKVM_SRC}/libudis86/libudis86.a"
+UKVM_LDLIBS="-lz -llz4 ${UKVM_SRC}/libudis86/libudis86.a"
 UKVM_HEADERS=
 UKVM_OBJS=
 add_obj ukvm_core.o ukvm_elf.o ukvm_main.o
@@ -98,7 +98,7 @@ TARGET=$(${UKVM_CC} -dumpmachine)
     die "Error running '${UKVM_CC} -dumpmachine', is your compiler working?"
 case ${TARGET} in
     x86_64-*linux*)
-        add_obj ukvm_hv_kvm.o ukvm_hv_kvm_x86_64.o ukvm_cpu_x86_64.o
+        add_obj ukvm_hv_kvm.o ukvm_hv_kvm_x86_64.o ukvm_cpu_x86_64.o ukvm_module_rr_dump.o
         add_header ukvm_hv_kvm.h ukvm_cpu_x86_64.h
         ;;
     x86_64-*freebsd1[12]*)
