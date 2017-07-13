@@ -65,11 +65,12 @@ void test_compress(FILE* outFp, FILE* inpFp)
     write_int(outFp, 0);
 }
 
-
 void test_decompress(FILE* outFp, FILE* inpFp)
 {
     LZ4_streamDecode_t lz4StreamDecode_body;
     LZ4_streamDecode_t* lz4StreamDecode = &lz4StreamDecode_body;
+
+    printf("pushin pthread cleanup handler\n");
 
     char decBuf[2][BLOCK_BYTES];
     int  decBufIndex = 0;
@@ -104,8 +105,9 @@ void test_decompress(FILE* outFp, FILE* inpFp)
 
         decBufIndex = (decBufIndex + 1) % 2;
     }
-}
 
+    write_int(outFp, 0);
+}
 
 int compare(FILE* fp0, FILE* fp1)
 {
@@ -129,7 +131,6 @@ int compare(FILE* fp0, FILE* fp1)
 
     return result;
 }
-
 
 int main2(int argc, char* argv[])
 {

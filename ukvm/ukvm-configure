@@ -80,7 +80,7 @@ add_module ()
 
 UKVM_CFLAGS=
 UKVM_LDFLAGS=
-UKVM_LDLIBS="-lz -llz4 ${UKVM_SRC}/libudis86/libudis86.a"
+UKVM_LDLIBS="-lz -lpthread -llz4 ${UKVM_SRC}/libudis86/libudis86.a"
 UKVM_HEADERS=
 UKVM_OBJS=
 add_obj ukvm_core.o ukvm_elf.o ukvm_main.o

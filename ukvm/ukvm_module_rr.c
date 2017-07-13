@@ -11,6 +11,7 @@
 #include <string.h>
 #include <err.h>
 #include <sys/mman.h>
+#include <pthread.h>
 
 #include <zlib.h>
 #include <linux/kvm.h>
@@ -51,6 +52,7 @@ static struct traps_head traps;
 
 int rr_mode = RR_MODE_NONE;
 static int rr_fd;
+//int rr_pipe[2];//File descriptor for creating a pipe
 
 void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
@@ -281,6 +283,29 @@ static void cpuid_emulate(struct ukvm_hv *hv, struct trap_t *trap)
     assert(ret == 0);
 }
 
+void test_compress(FILE* outFp, FILE* inpFp);
+
+void *rr_dump()
+{
+    FILE* inpFp = fopen("/tmp/myfifo", "rb");
+    FILE* outFp = fopen("rr_out.dat.lz4", "wb");
+
+    test_compress(outFp, inpFp);
+
+    fclose(outFp);
+    fclose(inpFp);
+
+    return NULL;
+}
+
+pthread_t tid1;
+
+static void handle_ukvm_exit(void)
+{
+    close(rr_fd);
+    pthread_join(tid1, NULL);
+}
+
 static int rr_init(char *rr_file)
 {
     CHECKS_INIT();
@@ -288,10 +313,14 @@ static int rr_init(char *rr_file)
     
     switch (rr_mode) {
     case RR_MODE_RECORD: {
+        atexit(handle_ukvm_exit);
+        pthread_create(&tid1, NULL, rr_dump, NULL);
+
         //rr_fd = open(rr_file, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
         mkfifo(myfifo, 0666);
         rr_fd = open(myfifo, O_WRONLY);
         assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
+
         break;
     }
     case RR_MODE_REPLAY: {
@@ -503,7 +532,7 @@ static int setup(struct ukvm_hv *hv)
         err(1, "RR: Cannot remove guest memory protection");
 
     rr_init("rr_out.dat");
-    
+
     ret = init_traps(hv);
     assert(ret == 0);
     /* for rdtsc traps, we need to handle int3s */
