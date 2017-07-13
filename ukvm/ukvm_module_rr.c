@@ -314,10 +314,10 @@ static int rr_init(char *rr_file)
     switch (rr_mode) {
     case RR_MODE_RECORD: {
         atexit(handle_ukvm_exit);
+        mkfifo(myfifo, 0666);
         pthread_create(&tid1, NULL, rr_dump, NULL);
 
         //rr_fd = open(rr_file, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
-        mkfifo(myfifo, 0666);
         rr_fd = open(myfifo, O_WRONLY);
         assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
 
