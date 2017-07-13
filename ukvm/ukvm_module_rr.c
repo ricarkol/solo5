@@ -27,7 +27,7 @@
 
 #define RR_MAGIC   0xff50505f
 
-//#define RR_DO_CHECKS
+#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 #define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -306,6 +306,7 @@ void *rr_read()
     FILE* outFp = fdopen(rr_pipe[1], "wb"); // [1] is writer
 
     setvbuf(inpFp, NULL, _IONBF, 0);
+    setvbuf(outFp, NULL, _IONBF, 0);
     test_decompress(outFp, inpFp);
 
     fclose(outFp);

@@ -62,7 +62,7 @@ void test_compress(FILE* outFp, FILE* inpFp)
         inpBufIndex = (inpBufIndex + 1) % 2;
     }
 
-    write_int(outFp, 0);
+    fflush(outFp);
 }
 
 void test_decompress(FILE* outFp, FILE* inpFp)
@@ -104,7 +104,7 @@ void test_decompress(FILE* outFp, FILE* inpFp)
         decBufIndex = (decBufIndex + 1) % 2;
     }
 
-    write_int(outFp, 0);
+    fflush(outFp);
 }
 
 int compare(FILE* fp0, FILE* fp1)
