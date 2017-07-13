@@ -52,7 +52,7 @@ static struct traps_head traps;
 
 int rr_mode = RR_MODE_NONE;
 static int rr_fd;
-//int rr_pipe[2];//File descriptor for creating a pipe
+int rr_pipe[2];
 
 void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
@@ -287,9 +287,10 @@ void test_compress(FILE* outFp, FILE* inpFp);
 
 void *rr_dump()
 {
-    FILE* inpFp = fopen("/tmp/myfifo", "rb");
+    FILE* inpFp = fdopen(rr_pipe[0], "rb");
     FILE* outFp = fopen("rr_out.dat.lz4", "wb");
 
+    setvbuf(inpFp, NULL, _IONBF, 0);
     test_compress(outFp, inpFp);
 
     fclose(outFp);
@@ -309,16 +310,19 @@ static void handle_ukvm_exit(void)
 static int rr_init(char *rr_file)
 {
     CHECKS_INIT();
-    char * myfifo = "/tmp/myfifo";
+    int res;
     
     switch (rr_mode) {
     case RR_MODE_RECORD: {
         atexit(handle_ukvm_exit);
-        mkfifo(myfifo, 0666);
+
+        res = pipe(rr_pipe);
+        if (res < 0)
+            err(1, "Failed to create pipe for recording");
+
         pthread_create(&tid1, NULL, rr_dump, NULL);
 
-        //rr_fd = open(rr_file, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
-        rr_fd = open(myfifo, O_WRONLY);
+        rr_fd = rr_pipe[1];
         assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
 
         break;
