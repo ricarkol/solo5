@@ -284,10 +284,11 @@ static void cpuid_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 }
 
 void test_compress(FILE* outFp, FILE* inpFp);
+void test_decompress(FILE* outFp, FILE* inpFp);
 
 void *rr_dump()
 {
-    FILE* inpFp = fdopen(rr_pipe[0], "rb");
+    FILE* inpFp = fdopen(rr_pipe[0], "rb"); // [0] is reader
     FILE* outFp = fopen("rr_out.dat.lz4", "wb");
 
     setvbuf(inpFp, NULL, _IONBF, 0);
@@ -299,38 +300,56 @@ void *rr_dump()
     return NULL;
 }
 
-pthread_t tid1;
+void *rr_read()
+{
+    FILE* inpFp = fopen("rr_out.dat.lz4", "rb");
+    FILE* outFp = fdopen(rr_pipe[1], "wb"); // [1] is writer
+
+    setvbuf(inpFp, NULL, _IONBF, 0);
+    test_decompress(outFp, inpFp);
+
+    fclose(outFp);
+    fclose(inpFp);
+
+    return NULL;
+}
+
+pthread_t tid;
 
 static void handle_ukvm_exit(void)
 {
     close(rr_fd);
-    pthread_join(tid1, NULL);
+    pthread_join(tid, NULL);
 }
 
 static int rr_init(char *rr_file)
 {
     CHECKS_INIT();
     int res;
-    
+
+    atexit(handle_ukvm_exit);
+
+    res = pipe(rr_pipe);
+    if (res < 0)
+        err(1, "Failed to create pipe for rr");
+   
     switch (rr_mode) {
     case RR_MODE_RECORD: {
-        atexit(handle_ukvm_exit);
+        pthread_create(&tid, NULL, rr_dump, NULL);
 
-        res = pipe(rr_pipe);
-        if (res < 0)
-            err(1, "Failed to create pipe for recording");
-
-        pthread_create(&tid1, NULL, rr_dump, NULL);
-
-        rr_fd = rr_pipe[1];
+        rr_fd = rr_pipe[1]; // used to write (1)
         assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
+        break;
+    }
 
-        break;
-    }
     case RR_MODE_REPLAY: {
-        rr_fd = open(rr_file, O_RDONLY);
+        pthread_create(&tid, NULL, rr_read, NULL);
+
+        rr_fd = rr_pipe[0]; // used to read (0)
+        assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
         break;
     }
+
     default:
         return -1;
     }

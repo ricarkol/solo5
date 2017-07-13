@@ -70,8 +70,6 @@ void test_decompress(FILE* outFp, FILE* inpFp)
     LZ4_streamDecode_t lz4StreamDecode_body;
     LZ4_streamDecode_t* lz4StreamDecode = &lz4StreamDecode_body;
 
-    printf("pushin pthread cleanup handler\n");
-
     char decBuf[2][BLOCK_BYTES];
     int  decBufIndex = 0;
 
