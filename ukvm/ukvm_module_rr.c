@@ -24,10 +24,11 @@
 #include "ukvm_rr.h"
 
 #include <fcntl.h>
+#include "lz4.h"
 
 #define RR_MAGIC   0xff50505f
 
-#define RR_DO_CHECKS
+//#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 #define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -53,6 +54,54 @@ static struct traps_head traps;
 int rr_mode = RR_MODE_NONE;
 static int rr_fd;
 int rr_pipe[2];
+
+LZ4_stream_t lz4Stream_body;
+LZ4_stream_t* lz4Stream = &lz4Stream_body;
+
+#define BLOCK_BYTES (1024 * 8)
+char inpBuf[2][BLOCK_BYTES];
+int  inpBufIndex = 0;
+
+#include <pthread.h>
+#include <semaphore.h>
+// N must be 2^i
+#define N (1024)
+
+struct ring_item_t {
+   int sz;
+   char *buf;
+};
+
+struct ring_item_t b[N];
+int in = 0, out = 0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+sem_t countsem, spacesem;
+
+void enqueue(struct ring_item_t value){
+    // wait if there is no space left:
+    sem_wait( &spacesem );
+
+    pthread_mutex_lock(&lock);
+    b[ (in++) & (N-1) ] = value;
+    pthread_mutex_unlock(&lock);
+
+    // increment the count of the number of items
+    sem_post(&countsem);
+}
+
+struct ring_item_t dequeue(){
+    // Wait if there are no items in the buffer
+    sem_wait(&countsem);
+
+    pthread_mutex_lock(&lock);
+    struct ring_item_t result = b[(out++) & (N-1)];
+    pthread_mutex_unlock(&lock);
+
+    // Increment the count of the number of spaces
+    sem_post(&spacesem);
+
+    return result;
+}
 
 void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
@@ -88,8 +137,9 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         assert(ret == 56);
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
-        ret = write(rr_fd, x, sz);
-        assert(ret == sz);
+
+        struct ring_item_t item = {.sz=sz, .buf=(char *)x};
+        enqueue(item);
     }
 }
 
@@ -288,6 +338,27 @@ void test_decompress(FILE* outFp, FILE* inpFp);
 
 void *rr_dump()
 {
+    LZ4_resetStream(lz4Stream);
+
+    while (1) {
+        struct ring_item_t item = dequeue();
+        continue;
+        char *x = item.buf;
+        int sz = item.sz;
+        char cmpBuf[LZ4_COMPRESSBOUND(sz)];
+        int cmpBytes = LZ4_compress_fast_continue(
+            lz4Stream, (char *)x, cmpBuf, sz, sizeof(cmpBuf), 17);
+
+        cmpBytes = cmpBytes;
+        //ret = write(rr_fd, x, sz);
+        //ret = write(rr_fd, &cmpBytes, 4);
+        //ret = write(rr_fd, cmpBuf, cmpBytes);
+        //assert(ret == sz);
+
+        inpBufIndex = (inpBufIndex + 1) % 2;
+    }
+
+    /*
     FILE* inpFp = fdopen(rr_pipe[0], "rb"); // [0] is reader
     FILE* outFp = fopen("rr_out.dat.lz4", "wb");
 
@@ -296,7 +367,7 @@ void *rr_dump()
 
     fclose(outFp);
     fclose(inpFp);
-
+    */
     return NULL;
 }
 
@@ -340,6 +411,10 @@ static int rr_init(char *rr_file)
 
         rr_fd = rr_pipe[1]; // used to write (1)
         assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
+
+        sem_init(&countsem, 0, 0);
+        sem_init(&spacesem, 0, 16);
+
         break;
     }
 
