@@ -141,7 +141,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 #endif
         static uint64_t i = 0;
         if (i + sz > (1024 * 32)) {
-            struct ring_item_t item = {.sz=sz, .buf=(char *)buf};
+            struct ring_item_t item = {.sz=i, .buf=(char *)buf};
             enqueue(item);
             i = 0;
         } else {
@@ -346,20 +346,21 @@ void test_decompress(FILE* outFp, FILE* inpFp);
 
 void *rr_dump()
 {
+    FILE* outFp = fopen("rr_out.dat.lz4", "wb");
     LZ4_resetStream(lz4Stream);
 
     while (1) {
         struct ring_item_t item = dequeue();
-        continue;
         char *x = item.buf;
         int sz = item.sz;
         char cmpBuf[LZ4_COMPRESSBOUND(sz)];
         int cmpBytes = LZ4_compress_fast_continue(
-            lz4Stream, (char *)x, cmpBuf, sz, sizeof(cmpBuf), 17);
+            lz4Stream, (char *)x, cmpBuf, sz, sizeof(cmpBuf), 8);
 
         cmpBytes = cmpBytes;
         //ret = write(rr_fd, x, sz);
-        //ret = write(rr_fd, &cmpBytes, 4);
+        fwrite(&cmpBytes, 4, 1, outFp);
+        fwrite(cmpBuf, cmpBytes, 1, outFp);
         //ret = write(rr_fd, cmpBuf, cmpBytes);
         //assert(ret == sz);
 
@@ -368,14 +369,13 @@ void *rr_dump()
 
     /*
     FILE* inpFp = fdopen(rr_pipe[0], "rb"); // [0] is reader
-    FILE* outFp = fopen("rr_out.dat.lz4", "wb");
 
     setvbuf(inpFp, NULL, _IONBF, 0);
     test_compress(outFp, inpFp);
 
-    fclose(outFp);
     fclose(inpFp);
     */
+    fclose(outFp);
     return NULL;
 }
 
