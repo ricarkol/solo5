@@ -65,7 +65,7 @@ int  inpBufIndex = 0;
 #include <pthread.h>
 #include <semaphore.h>
 // N must be 2^i
-#define N (1024)
+#define N (1024*1024)
 
 struct ring_item_t {
    int sz;
@@ -103,6 +103,8 @@ struct ring_item_t dequeue(){
     return result;
 }
 
+static char buf[1024 * 32];
+
 void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
     int ret;
@@ -137,9 +139,15 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         assert(ret == 56);
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
-
-        struct ring_item_t item = {.sz=sz, .buf=(char *)x};
-        enqueue(item);
+        static uint64_t i = 0;
+        if (i + sz > (1024 * 32)) {
+            struct ring_item_t item = {.sz=sz, .buf=(char *)buf};
+            enqueue(item);
+            i = 0;
+        } else {
+            memcpy(buf + i, x, sz);
+            i += sz;
+        }
     }
 }
 
