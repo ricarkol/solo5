@@ -77,12 +77,14 @@ int in = 0, out = 0;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 sem_t countsem, spacesem;
 
-void enqueue(struct ring_item_t value){
+void enqueue(char *buf, int sz){
     // wait if there is no space left:
     sem_wait( &spacesem );
 
     pthread_mutex_lock(&lock);
-    b[in] = value;
+    b[in].sz = sz;
+    if (buf)
+        memcpy(b[in].buf, buf, sz);
     if (++in >= N)
         in = 0;
     pthread_mutex_unlock(&lock);
@@ -128,7 +130,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         if (ret == 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
-        printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
 #ifdef RR_MAGIC_CHECKS
@@ -142,11 +143,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         assert(ret == 56);
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
-        printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
-        struct ring_item_t item = {.sz=sz};
-        memcpy(item.buf, x, sz);
-        item.sz = sz;
-        enqueue(item);
+        enqueue((char *)x, sz);
 
         /*
         static uint64_t i = 0;
@@ -387,8 +384,6 @@ void *rr_dump()
             break;
         }
         char* inpPtr = item.buf;
-        printf("\t recording val=%llu sz=%d\n",
-            *((unsigned long long *)inpPtr), item.sz);
         const int inpBytes = item.sz;
         {
             char cmpBuf[LZ4_COMPRESSBOUND(BLOCK_BYTES)];
@@ -432,8 +427,7 @@ pthread_t tid;
 
 static void handle_ukvm_exit(void)
 {
-    struct ring_item_t item = {.sz=-1};
-    enqueue(item);
+    enqueue(NULL, -1);
     close(rr_fd);
     pthread_join(tid, NULL);
 }
