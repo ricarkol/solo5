@@ -30,7 +30,7 @@
 
 //#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
-#define RR_MAGIC_CHECKS
+//#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
 #else
 #define HEAVY_CHECKS_IN(f) do{}while(0)
@@ -65,11 +65,11 @@ int  inpBufIndex = 0;
 #include <pthread.h>
 #include <semaphore.h>
 // N must be 2^i
-#define N (1024*1024)
+#define N (1024)
 
 struct ring_item_t {
    int sz;
-   char *buf;
+   char buf[BLOCK_BYTES];
 };
 
 struct ring_item_t b[N];
@@ -82,7 +82,9 @@ void enqueue(struct ring_item_t value){
     sem_wait( &spacesem );
 
     pthread_mutex_lock(&lock);
-    b[ (in++) & (N-1) ] = value;
+    b[in] = value;
+    if (++in >= N)
+        in = 0;
     pthread_mutex_unlock(&lock);
 
     // increment the count of the number of items
@@ -103,7 +105,7 @@ struct ring_item_t dequeue(){
     return result;
 }
 
-static char buf[1024 * 32];
+//static char buf[1024 * 32];
 
 void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
@@ -126,6 +128,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         if (ret == 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
+        printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
 #ifdef RR_MAGIC_CHECKS
@@ -139,15 +142,21 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         assert(ret == 56);
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
+        printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+        struct ring_item_t item = {.sz=sz};
+        memcpy(item.buf, x, sz);
+        item.sz = sz;
+        enqueue(item);
+
+        /*
         static uint64_t i = 0;
-        if (i + sz > (1024 * 32)) {
-            struct ring_item_t item = {.sz=i, .buf=(char *)buf};
-            enqueue(item);
-            i = 0;
+        if (i + sz > BLOCK_BYTES) {
+        if (1) {
         } else {
             memcpy(buf + i, x, sz);
             i += sz;
         }
+        */
     }
 }
 
@@ -344,37 +353,62 @@ static void cpuid_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 void test_compress(FILE* outFp, FILE* inpFp);
 void test_decompress(FILE* outFp, FILE* inpFp);
 
+static size_t write_int(FILE* fp, int i) {
+    return fwrite(&i, sizeof(i), 1, fp);
+}
+
+static size_t write_bin(FILE* fp, const void* array, size_t arrayBytes) {
+    return fwrite(array, 1, arrayBytes, fp);
+}
+
 void *rr_dump()
 {
     FILE* outFp = fopen("rr_out.dat.lz4", "wb");
+
+    LZ4_stream_t lz4Stream_body;
+    LZ4_stream_t* lz4Stream = &lz4Stream_body;
+
+    int  inpBufIndex = 0;
+
     LZ4_resetStream(lz4Stream);
 
     while (1) {
-        struct ring_item_t item = dequeue();
-        char *x = item.buf;
-        int sz = item.sz;
-        char cmpBuf[LZ4_COMPRESSBOUND(sz)];
-        int cmpBytes = LZ4_compress_fast_continue(
-            lz4Stream, (char *)x, cmpBuf, sz, sizeof(cmpBuf), 8);
+        sem_wait(&countsem);
+        //struct ring_item_t item = dequeue();
+        pthread_mutex_lock(&lock);
+        struct ring_item_t item = b[out];
+        if (++out >= N)
+            out = 0;
 
-        cmpBytes = cmpBytes;
-        //ret = write(rr_fd, x, sz);
-        fwrite(&cmpBytes, 4, 1, outFp);
-        fwrite(cmpBuf, cmpBytes, 1, outFp);
-        //ret = write(rr_fd, cmpBuf, cmpBytes);
-        //assert(ret == sz);
+        if (item.sz < 0) {
+            printf("negative item\n");
+            pthread_mutex_unlock(&lock);
+            sem_post(&spacesem);
+            break;
+        }
+        char* inpPtr = item.buf;
+        printf("\t recording val=%llu sz=%d\n",
+            *((unsigned long long *)inpPtr), item.sz);
+        const int inpBytes = item.sz;
+        {
+            char cmpBuf[LZ4_COMPRESSBOUND(BLOCK_BYTES)];
+            const int cmpBytes = LZ4_compress_fast_continue(
+                lz4Stream, inpPtr, cmpBuf, inpBytes, sizeof(cmpBuf), 16);
+            if(cmpBytes <= 0) {
+                pthread_mutex_unlock(&lock);
+                sem_post(&spacesem);
+                break;
+            }
+            write_int(outFp, cmpBytes);
+            write_bin(outFp, cmpBuf, (size_t) cmpBytes);
+        }
 
         inpBufIndex = (inpBufIndex + 1) % 2;
+        pthread_mutex_unlock(&lock);
+        sem_post(&spacesem);
     }
 
-    /*
-    FILE* inpFp = fdopen(rr_pipe[0], "rb"); // [0] is reader
-
-    setvbuf(inpFp, NULL, _IONBF, 0);
-    test_compress(outFp, inpFp);
-
-    fclose(inpFp);
-    */
+    fflush(outFp);
     fclose(outFp);
     return NULL;
 }
@@ -398,6 +432,8 @@ pthread_t tid;
 
 static void handle_ukvm_exit(void)
 {
+    struct ring_item_t item = {.sz=-1};
+    enqueue(item);
     close(rr_fd);
     pthread_join(tid, NULL);
 }
@@ -417,11 +453,8 @@ static int rr_init(char *rr_file)
     case RR_MODE_RECORD: {
         pthread_create(&tid, NULL, rr_dump, NULL);
 
-        rr_fd = rr_pipe[1]; // used to write (1)
-        assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
-
         sem_init(&countsem, 0, 0);
-        sem_init(&spacesem, 0, 16);
+        sem_init(&spacesem, 0, N);
 
         break;
     }
@@ -431,14 +464,14 @@ static int rr_init(char *rr_file)
 
         rr_fd = rr_pipe[0]; // used to read (0)
         assert(fcntl(rr_fd, F_SETPIPE_SZ, 1024 * 1024) > 0);
+        if (rr_fd <= 0)
+            errx(1, "couldn't open rr file %s\n", rr_file);
         break;
     }
 
     default:
         return -1;
     }
-    if (rr_fd <= 0)
-        errx(1, "couldn't open rr file %s\n", rr_file);
     return 0;
 }
     
