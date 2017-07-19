@@ -55,20 +55,19 @@ int rr_mode = RR_MODE_NONE;
 static int rr_fd;
 int rr_pipe[2];
 
-#define BLOCK_BYTES (1024 * 32)
-//#define BLOCK_BYTES (1024 * 32)
+#define BLOCK_BYTES (1024 * 128)
 
 #include <pthread.h>
 #include <semaphore.h>
 // N must be 2^i
-#define N (1024 * 32)
+#define N (64)
 
 struct ring_item_t {
    char buf[BLOCK_BYTES];
    int sz;
 };
 
-struct ring_item_t b[N];
+struct ring_item_t *b;
 uint64_t in = 0, out = 0;
 sem_t countsem, spacesem;
 
@@ -438,6 +437,8 @@ static int rr_init(char *rr_file)
     case RR_MODE_RECORD: {
         pthread_create(&tid, NULL, rr_dump, NULL);
 
+        b = calloc(sizeof(struct ring_item_t), N);
+        assert(b);
         sem_init(&countsem, 0, 0);
         sem_init(&spacesem, 0, N);
 

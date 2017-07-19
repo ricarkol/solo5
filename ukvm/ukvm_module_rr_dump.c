@@ -9,8 +9,7 @@
 #include <string.h>
 
 enum {
-    BLOCK_BYTES = 1024 * 32,
-//  BLOCK_BYTES = 1024 * 64,
+  BLOCK_BYTES = 1024 * 128,
 };
 
 
