@@ -28,7 +28,7 @@
 
 #define RR_MAGIC   0xff50505f
 
-//#define RR_DO_CHECKS
+#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 //#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -55,17 +55,12 @@ int rr_mode = RR_MODE_NONE;
 static int rr_fd;
 int rr_pipe[2];
 
-LZ4_stream_t lz4Stream_body;
-LZ4_stream_t* lz4Stream = &lz4Stream_body;
-
-#define BLOCK_BYTES (1024 * 8)
-char inpBuf[2][BLOCK_BYTES];
-int  inpBufIndex = 0;
+#define BLOCK_BYTES (1024 * 16)
 
 #include <pthread.h>
 #include <semaphore.h>
 // N must be 2^i
-#define N (1024)
+#define N (1024 * 32)
 
 struct ring_item_t {
    int sz;
@@ -73,21 +68,17 @@ struct ring_item_t {
 };
 
 struct ring_item_t b[N];
-int in = 0, out = 0;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+uint64_t in = 0, out = 0;
 sem_t countsem, spacesem;
 
 void enqueue(char *buf, int sz){
     // wait if there is no space left:
     sem_wait( &spacesem );
 
-    pthread_mutex_lock(&lock);
     b[in].sz = sz;
     if (buf)
         memcpy(b[in].buf, buf, sz);
-    if (++in >= N)
-        in = 0;
-    pthread_mutex_unlock(&lock);
+    __sync_fetch_and_add(&in, 1);
 
     // increment the count of the number of items
     sem_post(&countsem);
@@ -97,9 +88,7 @@ struct ring_item_t dequeue(){
     // Wait if there are no items in the buffer
     sem_wait(&countsem);
 
-    pthread_mutex_lock(&lock);
     struct ring_item_t result = b[(out++) & (N-1)];
-    pthread_mutex_unlock(&lock);
 
     // Increment the count of the number of spaces
     sem_post(&spacesem);
@@ -365,21 +354,16 @@ void *rr_dump()
     LZ4_stream_t lz4Stream_body;
     LZ4_stream_t* lz4Stream = &lz4Stream_body;
 
-    int  inpBufIndex = 0;
-
     LZ4_resetStream(lz4Stream);
 
     while (1) {
         sem_wait(&countsem);
         //struct ring_item_t item = dequeue();
-        pthread_mutex_lock(&lock);
         struct ring_item_t item = b[out];
-        if (++out >= N)
-            out = 0;
+        __sync_fetch_and_add(&out, 1);
 
         if (item.sz < 0) {
             printf("negative item\n");
-            pthread_mutex_unlock(&lock);
             sem_post(&spacesem);
             break;
         }
@@ -390,7 +374,6 @@ void *rr_dump()
             const int cmpBytes = LZ4_compress_fast_continue(
                 lz4Stream, inpPtr, cmpBuf, inpBytes, sizeof(cmpBuf), 16);
             if(cmpBytes <= 0) {
-                pthread_mutex_unlock(&lock);
                 sem_post(&spacesem);
                 break;
             }
@@ -398,8 +381,6 @@ void *rr_dump()
             write_bin(outFp, cmpBuf, (size_t) cmpBytes);
         }
 
-        inpBufIndex = (inpBufIndex + 1) % 2;
-        pthread_mutex_unlock(&lock);
         sem_post(&spacesem);
     }
 
