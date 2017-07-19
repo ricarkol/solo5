@@ -55,7 +55,8 @@ int rr_mode = RR_MODE_NONE;
 static int rr_fd;
 int rr_pipe[2];
 
-#define BLOCK_BYTES (1024 * 16)
+#define BLOCK_BYTES (1024 * 32)
+//#define BLOCK_BYTES (1024 * 32)
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -97,7 +98,8 @@ struct ring_item_t dequeue(){
     return result;
 }
 
-//static char buf[1024 * 32];
+static char staging[BLOCK_BYTES];
+static int staging_pos = 0;
 
 void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
@@ -120,6 +122,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         if (ret == 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
+        printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
 #ifdef RR_MAGIC_CHECKS
@@ -133,7 +136,19 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         assert(ret == 56);
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
-        enqueue((char *)x, sz);
+        printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+
+        //enqueue((char *)x, sz); return;
+
+        assert(sz < BLOCK_BYTES);
+        if (staging_pos + sz > BLOCK_BYTES) {
+            enqueue(staging, staging_pos);
+            staging_pos = 0;
+        }
+
+        memcpy(staging + staging_pos, x, sz);
+        staging_pos += sz;
+        assert(sz < BLOCK_BYTES);
     }
 }
 
@@ -350,9 +365,13 @@ void *rr_dump()
     while (1) {
         sem_wait(&countsem);
         struct ring_item_t *item = &b[out % N];
+        char *ptr = item->buf;
         __sync_fetch_and_add(&out, 1);
+        printf("%s recording val=%llu sz=%d\n", "-", *((unsigned long long *)ptr),item->sz);
 
         if (item->sz < 0) {
+            sem_post(&spacesem);
+            printf("item->sz < 0\n");
             break;
         }
         char* inpPtr = item->buf;
@@ -360,8 +379,10 @@ void *rr_dump()
         {
             char cmpBuf[LZ4_COMPRESSBOUND(BLOCK_BYTES)];
             const int cmpBytes = LZ4_compress_fast_continue(
-                lz4Stream, inpPtr, cmpBuf, inpBytes, sizeof(cmpBuf), 16);
-            if(cmpBytes <= 0) {
+                lz4Stream, inpPtr, cmpBuf, inpBytes, sizeof(cmpBuf), 32);
+            assert(cmpBytes > 0);
+            if (cmpBytes <= 0) {
+                printf("cmpBytes <=0\n");
                 sem_post(&spacesem);
                 break;
             }
@@ -396,6 +417,7 @@ pthread_t tid;
 
 static void handle_ukvm_exit(void)
 {
+    enqueue(staging, staging_pos);
     enqueue(NULL, -1);
     close(rr_fd);
     pthread_join(tid, NULL);
