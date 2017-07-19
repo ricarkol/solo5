@@ -28,7 +28,7 @@
 
 #define RR_MAGIC   0xff50505f
 
-#define RR_DO_CHECKS
+//#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 //#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -63,8 +63,8 @@ int rr_pipe[2];
 #define N (1024 * 32)
 
 struct ring_item_t {
-   int sz;
    char buf[BLOCK_BYTES];
+   int sz;
 };
 
 struct ring_item_t b[N];
@@ -75,9 +75,9 @@ void enqueue(char *buf, int sz){
     // wait if there is no space left:
     sem_wait( &spacesem );
 
-    b[in].sz = sz;
+    b[in % N].sz = sz;
     if (buf)
-        memcpy(b[in].buf, buf, sz);
+        memcpy(b[in % N].buf, buf, sz);
     __sync_fetch_and_add(&in, 1);
 
     // increment the count of the number of items
@@ -359,11 +359,10 @@ void *rr_dump()
     while (1) {
         sem_wait(&countsem);
         //struct ring_item_t item = dequeue();
-        struct ring_item_t item = b[out];
+        struct ring_item_t item = b[out % N];
         __sync_fetch_and_add(&out, 1);
 
         if (item.sz < 0) {
-            printf("negative item\n");
             sem_post(&spacesem);
             break;
         }
