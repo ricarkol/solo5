@@ -28,7 +28,7 @@
 
 #define RR_MAGIC   0xff50505f
 
-//#define RR_DO_CHECKS
+#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 //#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -71,12 +71,13 @@ struct ring_item_t b[N];
 uint64_t in = 0, out = 0;
 sem_t countsem, spacesem;
 
-void enqueue(char *buf, int sz){
+void enqueue(char *buf, int sz)
+{
     // wait if there is no space left:
     sem_wait( &spacesem );
 
     b[in % N].sz = sz;
-    if (buf)
+    if (sz > 0)
         memcpy(b[in % N].buf, buf, sz);
     __sync_fetch_and_add(&in, 1);
 
@@ -133,16 +134,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
         enqueue((char *)x, sz);
-
-        /*
-        static uint64_t i = 0;
-        if (i + sz > BLOCK_BYTES) {
-        if (1) {
-        } else {
-            memcpy(buf + i, x, sz);
-            i += sz;
-        }
-        */
     }
 }
 
@@ -358,12 +349,10 @@ void *rr_dump()
 
     while (1) {
         sem_wait(&countsem);
-        //struct ring_item_t item = dequeue();
         struct ring_item_t item = b[out % N];
         __sync_fetch_and_add(&out, 1);
 
         if (item.sz < 0) {
-            sem_post(&spacesem);
             break;
         }
         char* inpPtr = item.buf;
