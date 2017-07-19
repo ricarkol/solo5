@@ -122,7 +122,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         if (ret == 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
-        printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+        //printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
 #ifdef RR_MAGIC_CHECKS
@@ -136,7 +136,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         assert(ret == 56);
         printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 #endif
-        printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+        //printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 
         //enqueue((char *)x, sz); return;
 
@@ -365,9 +365,9 @@ void *rr_dump()
     while (1) {
         sem_wait(&countsem);
         struct ring_item_t *item = &b[out % N];
-        char *ptr = item->buf;
+        //char *ptr = item->buf;
         __sync_fetch_and_add(&out, 1);
-        printf("%s recording val=%llu sz=%d\n", "-", *((unsigned long long *)ptr),item->sz);
+        //printf("%s recording val=%llu sz=%d\n", "-", *((unsigned long long *)ptr),item->sz);
 
         if (item->sz < 0) {
             sem_post(&spacesem);
