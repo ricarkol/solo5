@@ -28,7 +28,7 @@
 
 #define RR_MAGIC   0xff50505f
 
-#define RR_DO_CHECKS
+//#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
 //#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
@@ -349,14 +349,14 @@ void *rr_dump()
 
     while (1) {
         sem_wait(&countsem);
-        struct ring_item_t item = b[out % N];
+        struct ring_item_t *item = &b[out % N];
         __sync_fetch_and_add(&out, 1);
 
-        if (item.sz < 0) {
+        if (item->sz < 0) {
             break;
         }
-        char* inpPtr = item.buf;
-        const int inpBytes = item.sz;
+        char* inpPtr = item->buf;
+        const int inpBytes = item->sz;
         {
             char cmpBuf[LZ4_COMPRESSBOUND(BLOCK_BYTES)];
             const int cmpBytes = LZ4_compress_fast_continue(
