@@ -116,7 +116,7 @@ static void usage(const char *prog)
 
 int main(int argc, char **argv)
 {
-    size_t mem_size = 0x4000000;
+    size_t mem_size = 1073741824;
     ukvm_gpa_t gpa_ep, gpa_kend, gpa_tend;
     const char *prog;
     const char *elffile;
