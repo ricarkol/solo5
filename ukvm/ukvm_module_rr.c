@@ -525,8 +525,7 @@ void rr_ukvm_netread(struct ukvm_hv *hv, struct ukvm_netread *o, int loc)
 
     CHECK(loc, &o->data, sizeof(o->data));
     RR(loc, &o->len, sizeof(o->len));
-    //RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), o->len);
-    RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), 2000); // XXX check this
+    RR(loc, UKVM_CHECKED_GPA_P(hv, o->data, o->len), o->len);
     RR(loc, &o->ret, sizeof(o->ret));
 
     HEAVY_CHECKS_OUT();
