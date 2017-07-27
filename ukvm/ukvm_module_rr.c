@@ -26,11 +26,9 @@
 #include <fcntl.h>
 #include "lz4.h"
 
-#define RR_MAGIC   0xff50505f
 
 //#define RR_DO_CHECKS
 #ifdef RR_DO_CHECKS
-//#define RR_MAGIC_CHECKS
 #include "ukvm_module_rr_checks.h"
 #else
 #define HEAVY_CHECKS_IN(f) do{}while(0)
@@ -104,19 +102,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 {
     int ret;
     if ((l == RR_LOC_IN) && (rr_mode == RR_MODE_REPLAY)) {
-#ifdef RR_MAGIC_CHECKS
-        uint32_t magic;
-        char buf[56];
-        ret = read(rr_fd, &magic, 4);
-        if (ret == 0)
-            errx(0, "Reached end of replay\n");
-        assert(magic == RR_MAGIC);
-        ret = read(rr_fd, buf, 56);
-        if (ret == 0)
-            errx(0, "Reached end of replay\n");
-        if (strcmp(buf, func) != 0)
-            errx(1, "asking for %s and trace has %s\n", func, buf);
-#endif
         ret = read(rr_fd, x, sz);
         if (ret == 0)
             errx(0, "Reached end of replay\n");
@@ -124,17 +109,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
         //printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
-#ifdef RR_MAGIC_CHECKS
-        uint32_t magic;
-        char buf[56];
-        magic = RR_MAGIC;
-        ret = write(rr_fd, &magic, 4);
-        assert(ret == 4);
-        sprintf(buf, "%s", func);
-        ret = write(rr_fd, buf, 56);
-        assert(ret == 56);
-        printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
-#endif
         //printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
 
         //enqueue((char *)x, sz); return;
