@@ -107,6 +107,8 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
         //printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+        printf("%s\n", func);
+        fflush(stdout);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
         //printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
@@ -142,39 +144,41 @@ static int init_traps(struct ukvm_hv *hv)
     ud_set_pc(&ud_obj, hv->p_entry);
     ud_set_syntax(&ud_obj, UD_SYN_INTEL);
 
-    while (ud_disassemble(&ud_obj)) {
-        if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc ||
-            ud_insn_mnemonic(&ud_obj) == UD_Irdrand ||
-            ud_insn_mnemonic(&ud_obj) == UD_Icpuid) {
+// mnemonic=528 off=100200 len=2
+// mnemonic=528 off=10025c len=2
+    {
             struct trap_t *trap;
             int i;
-
             trap = malloc(sizeof(struct trap_t));
             assert(trap);
             memset(trap, 0, sizeof(struct trap_t));
-            trap->insn_off = ud_insn_off(&ud_obj);
-            trap->insn_mnemonic = ud_insn_mnemonic(&ud_obj);
-            trap->insn_len = ud_insn_len(&ud_obj);
-            if (ud_insn_opr(&ud_obj, 0))
-                trap->insn_opr[0] = *ud_insn_opr(&ud_obj, 0);
-            if (ud_insn_opr(&ud_obj, 1))
-                trap->insn_opr[1] = *ud_insn_opr(&ud_obj, 1);
-
-#ifdef RR_DO_CHECKS
-            printf("mnemonic=%s off=%"PRIx64" len=%u\n",
-                   ud_insn_asm(&ud_obj),
-                   trap->insn_off, trap->insn_len);
-#endif
-
+            trap->insn_off = 0x100200;
+            trap->insn_mnemonic = 528;
+            trap->insn_len = 2;
             /* We replace the first byte with an int3, which traps */
             uint8_t *addr = UKVM_CHECKED_GPA_P(hv, trap->insn_off,
                                                trap->insn_len);
             addr[0] = 0xcc; /* int3 */
             for (i = 1; i < trap->insn_len; i++)
                 addr[i] = 0x90; /* nop */
-
             SLIST_INSERT_HEAD(&traps, trap, entries);
-        }
+    }
+    {
+            struct trap_t *trap;
+            int i;
+            trap = malloc(sizeof(struct trap_t));
+            assert(trap);
+            memset(trap, 0, sizeof(struct trap_t));
+            trap->insn_off = 0x10025c;
+            trap->insn_mnemonic = 528;
+            trap->insn_len = 2;
+            /* We replace the first byte with an int3, which traps */
+            uint8_t *addr = UKVM_CHECKED_GPA_P(hv, trap->insn_off,
+                                               trap->insn_len);
+            addr[0] = 0xcc; /* int3 */
+            for (i = 1; i < trap->insn_len; i++)
+                addr[i] = 0x90; /* nop */
+            SLIST_INSERT_HEAD(&traps, trap, entries);
     }
 
     dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
@@ -328,7 +332,10 @@ static size_t write_bin(FILE* fp, const void* array, size_t arrayBytes) {
 
 void *rr_dump()
 {
-    FILE* outFp = fopen("rr_out.dat.lz4", "wb");
+    int fd;
+    char name[] = "rr_out.dat.XXXXXX";
+    fd = mkstemp(name);
+    FILE* outFp = fdopen(fd, "wb");
 
     LZ4_stream_t lz4Stream_body;
     LZ4_stream_t* lz4Stream = &lz4Stream_body;
@@ -344,7 +351,7 @@ void *rr_dump()
 
         if (item->sz < 0) {
             sem_post(&spacesem);
-            printf("item->sz < 0\n");
+            //printf("item->sz < 0\n");
             break;
         }
         char* inpPtr = item->buf;
