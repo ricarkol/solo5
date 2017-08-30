@@ -107,6 +107,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
         //printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
+        fprintf(stderr, "%s\n", func);
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
         //printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
