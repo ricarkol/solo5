@@ -26,12 +26,24 @@ static void puts(const char *s)
     solo5_console_write(s, strlen(s));
 }
 
+int rdrand32(unsigned int* result)
+{
+  int res = 0;
+  while (res == 0)
+    {
+      res = __builtin_ia32_rdrand32_step(result);
+    }
+  return (res == 1);
+}
+
 int solo5_app_main(char *cmdline __attribute__((unused)))
 {
+#include "cookies.h"
+    unsigned int rand;
     puts("\n**** Solo5 standalone test_exception ****\n\n");
-
-    uint64_t addr_invalid = 2ULL << 33;
-    *(uint8_t *)addr_invalid = 1;
+    rdrand32(&rand);
+    puts(cookies[rand %  4403 + 1]);
+    puts("");
 
     return 0;
 }

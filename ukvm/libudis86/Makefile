@@ -3,7 +3,7 @@
 #
 
 UKVM_CC=gcc
-UKVM_CFLAGS=-Wall -Werror -std=c99 -O2 -g
+UKVM_CFLAGS=-Wall -Werror -std=c99 -O0 -g
 
 .PHONY: all
 all: libudis86.a
