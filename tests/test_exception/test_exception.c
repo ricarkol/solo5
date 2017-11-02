@@ -42,8 +42,11 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
     unsigned int rand;
     puts("\n**** Solo5 standalone test_exception ****\n\n");
     rdrand32(&rand);
-    puts(cookies[rand %  4403 + 1]);
-    puts("");
+    // 83466 items in the cookies array
+    // ukvm fails after 83475
+    puts(cookies[rand %  83475 + 30]);
+    puts(cookies[83475]);
+    puts("\n");
 
     return 0;
 }
