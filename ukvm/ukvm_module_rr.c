@@ -577,23 +577,18 @@ int rr_handle_vmexits(struct ukvm_hv *hv)
         ret = ioctl(hv->b->vcpufd, KVM_GET_REGS, &regs);
         assert(ret == 0);
 
-        int found = 0;
-
         SLIST_FOREACH(trap, &traps, entries) {
             if (trap->insn_off == regs.rip) {
                 switch (trap->insn_mnemonic) {
                 case UD_Irdtsc:
-                    found = 1;
                     rdtsc_emulate(hv, trap);
                     break;
 
                 case UD_Irdrand:
-                    found = 1;
                     rdrand_emulate(hv, trap);
                     break;
 
                 case UD_Icpuid:
-                    found = 1;
                     cpuid_emulate(hv, trap);
                     break;
 
@@ -607,14 +602,11 @@ int rr_handle_vmexits(struct ukvm_hv *hv)
                 return 0;
             }
         }
-        if (found == 0) {
 #ifdef UKVM_MODULE_GDB
-            return gdb_handle_exit(hv);
+        return gdb_handle_exit(hv);
 #else
-            errx(1, "Unhandled trap");
+        errx(1, "Unhandled trap");
 #endif
-        }
-        return 0;
     } else {
 #ifdef UKVM_MODULE_GDB
         return gdb_handle_exit(hv);
