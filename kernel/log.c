@@ -19,7 +19,7 @@
  */
 #include "kernel.h"
 
-static log_level_t log_level = INFO;
+static log_level_t log_level = ERROR;
 
 int ee_vprintf(const char *fmt, va_list args);
 

@@ -141,6 +141,7 @@ static int init_traps(struct ukvm_hv *hv)
     ud_set_pc(&ud_obj, hv->p_entry);
     ud_set_syntax(&ud_obj, UD_SYN_INTEL);
 
+#if 0
     while (ud_disassemble(&ud_obj)) {
         if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc ||
             ud_insn_mnemonic(&ud_obj) == UD_Irdrand ||
@@ -158,17 +159,49 @@ static int init_traps(struct ukvm_hv *hv)
             if (ud_insn_opr(&ud_obj, 1))
                 trap->insn_opr[1] = *ud_insn_opr(&ud_obj, 1);
 
-#ifdef RR_DO_CHECKS
+//#ifdef RR_DO_CHECKS
             printf("mnemonic=%s off=%"PRIx64" len=%u\n",
                    ud_insn_asm(&ud_obj),
                    trap->insn_off, trap->insn_len);
-#endif
+//#endif
 
             ukvm_gdb_add_breakpoint(hv, GDB_BREAKPOINT_SW,
                                     trap->insn_off, trap->insn_len);
             SLIST_INSERT_HEAD(&traps, trap, entries);
         }
     }
+#endif
+
+{
+// mnemonic=rdtsc off=0x100268 len=2
+    struct trap_t *trap;
+    trap = malloc(sizeof(struct trap_t));
+    assert(trap);
+    memset(trap, 0, sizeof(struct trap_t));
+    trap->insn_off = 0x100268;
+    trap->insn_mnemonic = UD_Irdtsc;
+    trap->insn_len = 2;
+    ukvm_gdb_add_breakpoint(hv, GDB_BREAKPOINT_SW,
+                            trap->insn_off, trap->insn_len);
+    SLIST_INSERT_HEAD(&traps, trap, entries);
+}
+
+{
+// mnemonic=rdrand rax off=0x10b34d len=3
+    struct trap_t *trap;
+    trap = malloc(sizeof(struct trap_t));
+    assert(trap);
+    memset(trap, 0, sizeof(struct trap_t));
+    trap->insn_off = 0x10b34d;
+    trap->insn_mnemonic = UD_Irdrand;
+    trap->insn_len = 3;
+    trap->insn_opr[0].size = 64;
+    trap->insn_opr[0].type = UD_OP_REG;
+    trap->insn_opr[0].base = UD_R_RAX;
+    ukvm_gdb_add_breakpoint(hv, GDB_BREAKPOINT_SW,
+                            trap->insn_off, trap->insn_len);
+    SLIST_INSERT_HEAD(&traps, trap, entries);
+}
     return 0;
 }
 
@@ -338,7 +371,6 @@ void *rr_dump()
 
         if (item->sz < 0) {
             sem_post(&spacesem);
-            printf("item->sz < 0\n");
             break;
         }
         char* inpPtr = item->buf;

@@ -30,7 +30,7 @@ OBJCOPY?=objcopy
 # Exported to OPAM via pkg-config.
 MD_CFLAGS=$(HOST_CFLAGS) -ffreestanding
 ifeq ($(TARGET_ARCH), x86_64)
-MD_CFLAGS+=-mno-red-zone
+MD_CFLAGS+=-mno-red-zone -mrdrnd
 endif
 
 # Likewise.

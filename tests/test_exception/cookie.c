@@ -18,13 +18,7 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "solo5.h"
-#include "../../kernel/lib.c"
-
-static void puts(const char *s)
-{
-    solo5_console_write(s, strlen(s));
-}
+#include<stdio.h>
 
 int rdrand32(unsigned int* result)
 {
@@ -36,15 +30,15 @@ int rdrand32(unsigned int* result)
   return (res == 1);
 }
 
-int solo5_app_main(char *cmdline __attribute__((unused)))
+int main()
 {
 #include "cookies.h"
     unsigned int rand;
     rdrand32(&rand);
     // ukvm fails after 83475
-    puts("{\"type\":\"cookie-out\",\"data\":\"");
-    puts(cookies[rand %  83475 + 30]);
-    puts("\"}\n");
+    printf("{\"type\":\"cookie-out\",\"data\":\"");
+    printf(cookies[rand %  83466 + 30]);
+    printf("\"}\n");
 
     return 0;
 }
