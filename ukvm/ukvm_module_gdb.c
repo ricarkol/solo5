@@ -50,17 +50,11 @@
 #include "ukvm_gdb.h"
 
 #if defined(__linux__) && defined(__x86_64__)
-
-#include "ukvm_gdb_kvm_x86_64.c"
-
+;
 #elif defined(__FreeBSD__) && defined(__x86_64__)
-
-#include "ukvm_gdb_freebsd_x86_64.c"
-
+;
 #else
-
 #error Unsupported target
-
 #endif 
 
 static bool use_gdb = false;
@@ -372,10 +366,13 @@ static void send_response(char code, int sigval, bool wait_for_ack)
         send_packet_no_ack(obuf);
 }
 
-static void gdb_handle_exception(struct ukvm_hv *hv, int sigval)
+void gdb_handle_exception(struct ukvm_hv *hv, int sigval)
 {
     char *packet;
     char obuf[BUFMAX];
+
+    if (!use_gdb)
+        return;
 
     /* Notify the debugger of our last signal */
     send_response('S', sigval, true);
@@ -575,9 +572,12 @@ static void gdb_stub_start(struct ukvm_hv *hv)
  * we handle it here (and not in the vcpu loop). We force the handling here, by 
  * returning 0; and return -1 otherwise.
  */
-static int handle_exit(struct ukvm_hv *hv)
+int gdb_handle_exit(struct ukvm_hv *hv)
 {
     int sigval = 0;
+
+    if (!use_gdb)
+        return -1;
 
     if (ukvm_gdb_read_last_signal(hv, &sigval) == -1)
         /* Handle this exit in the vcpu loop */
@@ -617,8 +617,10 @@ static int setup(struct ukvm_hv *hv)
     if (!use_gdb)
         return 0;
 
-    if (ukvm_core_register_vmexit(handle_exit) == -1)
+#ifndef UKVM_MODULE_RR
+    if (ukvm_core_register_vmexit(gdb_handle_exit) == -1)
         return -1;
+#endif
 
     if (ukvm_gdb_supported() == -1)
         errx(1, "GDB support not implemented on this backend/architecture");

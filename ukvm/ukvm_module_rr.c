@@ -132,8 +132,6 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
 
 static int init_traps(struct ukvm_hv *hv)
 {
-    struct kvm_guest_debug dbg = {0};
-
     /* This disassemble takes ~5ms */
     ud_t ud_obj;
     ud_init(&ud_obj);
@@ -148,7 +146,6 @@ static int init_traps(struct ukvm_hv *hv)
             ud_insn_mnemonic(&ud_obj) == UD_Irdrand ||
             ud_insn_mnemonic(&ud_obj) == UD_Icpuid) {
             struct trap_t *trap;
-            int i;
 
             trap = malloc(sizeof(struct trap_t));
             assert(trap);
@@ -167,24 +164,11 @@ static int init_traps(struct ukvm_hv *hv)
                    trap->insn_off, trap->insn_len);
 #endif
 
-            /* We replace the first byte with an int3, which traps */
-            uint8_t *addr = UKVM_CHECKED_GPA_P(hv, trap->insn_off,
-                                               trap->insn_len);
-            addr[0] = 0xcc; /* int3 */
-            for (i = 1; i < trap->insn_len; i++)
-                addr[i] = 0x90; /* nop */
-
+            ukvm_gdb_add_breakpoint(hv, GDB_BREAKPOINT_SW,
+                                    trap->insn_off, trap->insn_len);
             SLIST_INSERT_HEAD(&traps, trap, entries);
         }
     }
-
-    dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
-    if (ioctl(hv->b->vcpufd, KVM_SET_GUEST_DEBUG, &dbg) == -1) {
-        /* The KVM_CAP_SET_GUEST_DEBUG capbility is not available. */
-        err(1, "KVM_SET_GUEST_DEBUG failed");
-        return -1;
-    }
-
     return 0;
 }
 
@@ -576,39 +560,68 @@ void rr_ukvm_rdrand(struct ukvm_hv *hv, uint64_t *randval, int loc)
     HEAVY_CHECKS_OUT();
 }
 
-static int handle_vmexits(struct ukvm_hv *hv)
-{
-    /* if it's not an int3 for a rdtsc or rdrand, let the vcpu loop do it */
-    if (hv->b->vcpurun->exit_reason != KVM_EXIT_DEBUG)
-        return -1;
+int gdb_handle_exit(struct ukvm_hv *hv);
 
+int rr_handle_vmexits(struct ukvm_hv *hv)
+{
     struct kvm_regs regs;
     struct trap_t *trap;
     int ret;
-    
-    ret = ioctl(hv->b->vcpufd, KVM_GET_REGS, &regs);
-    assert(ret == 0);
+    int sigval = 0;
 
-    SLIST_FOREACH(trap, &traps, entries) {
-        if (trap->insn_off == regs.rip) {
-            switch (trap->insn_mnemonic) {
-            case UD_Irdtsc:
-                rdtsc_emulate(hv, trap);
-                break;
+    if (ukvm_gdb_read_last_signal(hv, &sigval) == -1)
+        /* Handle this exit in the vcpu loop */
+        return -1;
 
-            case UD_Irdrand:
-                rdrand_emulate(hv, trap);
-                break;
+    if (sigval == GDB_SIGNAL_TRAP) {
+        ret = ioctl(hv->b->vcpufd, KVM_GET_REGS, &regs);
+        assert(ret == 0);
 
-            case UD_Icpuid:
-                cpuid_emulate(hv, trap);
-                break;
+        int found = 0;
 
-            default:
-                errx(1, "Unhandled mnemonic");
+        SLIST_FOREACH(trap, &traps, entries) {
+            if (trap->insn_off == regs.rip) {
+                switch (trap->insn_mnemonic) {
+                case UD_Irdtsc:
+                    found = 1;
+                    rdtsc_emulate(hv, trap);
+                    break;
+
+                case UD_Irdrand:
+                    found = 1;
+                    rdrand_emulate(hv, trap);
+                    break;
+
+                case UD_Icpuid:
+                    found = 1;
+                    cpuid_emulate(hv, trap);
+                    break;
+
+                default:
+#ifdef UKVM_MODULE_GDB
+                    return gdb_handle_exit(hv);
+#else
+                    errx(1, "Unhandled trap");
+#endif
+                }
+                return 0;
             }
-            return 0;
         }
+        if (found == 0) {
+#ifdef UKVM_MODULE_GDB
+            return gdb_handle_exit(hv);
+#else
+            errx(1, "Unhandled trap");
+#endif
+        }
+        return 0;
+    } else {
+#ifdef UKVM_MODULE_GDB
+        return gdb_handle_exit(hv);
+#else
+        /* Handle this exit in the vcpu loop */
+        return -1;
+#endif
     }
 
     /* it wasn't an rdtsc */
@@ -635,9 +648,11 @@ static int setup(struct ukvm_hv *hv)
 
     ret = init_traps(hv);
     assert(ret == 0);
+
     /* for rdtsc traps, we need to handle int3s */
-    ret = ukvm_core_register_vmexit(handle_vmexits);
+    ret = ukvm_core_register_vmexit(rr_handle_vmexits);
     assert(ret == 0);
+
     /* XXX we really want a entry exit hook for rr */
     return 0;
 }
