@@ -78,7 +78,7 @@ add_module ()
     add_cflags "${enableit}"
 }
 
-UKVM_CFLAGS=
+UKVM_CFLAGS=-mrdrnd
 UKVM_LDFLAGS=
 UKVM_LDLIBS="-lz -lpthread -llz4 ${UKVM_SRC}/libudis86/libudis86.a"
 UKVM_HEADERS=

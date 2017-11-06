@@ -197,6 +197,16 @@ static void rdtsc_emulate(struct ukvm_hv *hv, struct trap_t *trap)
     assert(ret == 0);
 }
 
+int rdrand64(uint64_t* result)
+{
+  int res = 0;
+  while (res == 0)
+    {
+      res = __builtin_ia32_rdrand64_step((long long unsigned int *)result);
+    }
+  return (res == 1);
+}
+
 static void rdrand_emulate(struct ukvm_hv *hv, struct trap_t *trap)
 {
     uint64_t randval = 0;
@@ -228,8 +238,7 @@ OF, SF, ZF, AF, PF <- 0;
 
     RR_INPUT(hv, rdrand, &randval);
 
-    // XXX: this is pretty bad
-    randval = ((long long)rand() << 32) | rand();
+    rdrand64(&randval);
     
     RR_OUTPUT(hv, rdrand, &randval);
 
