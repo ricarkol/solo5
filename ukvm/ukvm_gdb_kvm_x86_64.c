@@ -79,7 +79,8 @@ static int kvm_arch_insert_sw_breakpoint(struct ukvm_hv *hv, struct breakpoint_t
     /* The address check at the GDB server just returned an error if addr was
      * bad. UKVM_CHECKED_GPA_P will panic if that's the case. */
     uint8_t *insn = UKVM_CHECKED_GPA_P(hv, bp->addr, bp->len);
-    bp->saved_insn = *insn;
+    if (*insn != int3)
+        bp->saved_insn = *insn;
     /*
      * We just modify the first byte even if the instruction is multi-byte.
      * The debugger keeps track of the length of the instruction. The
@@ -93,7 +94,7 @@ static int kvm_arch_insert_sw_breakpoint(struct ukvm_hv *hv, struct breakpoint_t
 static int kvm_arch_remove_sw_breakpoint(struct ukvm_hv *hv, struct breakpoint_t *bp)
 {
     uint8_t *insn = UKVM_CHECKED_GPA_P(hv, bp->addr, bp->len);
-    assert(*insn == int3);
+    //assert(*insn == int3);
     *insn = bp->saved_insn;
     return 0;
 }

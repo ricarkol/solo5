@@ -141,7 +141,6 @@ static int init_traps(struct ukvm_hv *hv)
     ud_set_pc(&ud_obj, hv->p_entry);
     ud_set_syntax(&ud_obj, UD_SYN_INTEL);
 
-#if 0
     while (ud_disassemble(&ud_obj)) {
         if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc ||
             ud_insn_mnemonic(&ud_obj) == UD_Irdrand ||
@@ -170,8 +169,8 @@ static int init_traps(struct ukvm_hv *hv)
             SLIST_INSERT_HEAD(&traps, trap, entries);
         }
     }
-#endif
 
+#if 0
 {
 // mnemonic=rdtsc off=0x100268 len=2
     struct trap_t *trap;
@@ -202,6 +201,7 @@ static int init_traps(struct ukvm_hv *hv)
                             trap->insn_off, trap->insn_len);
     SLIST_INSERT_HEAD(&traps, trap, entries);
 }
+#endif
     return 0;
 }
 
@@ -620,6 +620,14 @@ int rr_handle_vmexits(struct ukvm_hv *hv)
 
         SLIST_FOREACH(trap, &traps, entries) {
             if (trap->insn_off == regs.rip) {
+#ifdef UKVM_MODULE_GDB
+                uint8_t *insn = UKVM_CHECKED_GPA_P(hv,
+                                             trap->insn_off, trap->insn_len);
+                *insn = 0x90; // NOP
+                gdb_handle_exit(hv);
+                ukvm_gdb_add_breakpoint(hv, GDB_BREAKPOINT_SW,
+                                        trap->insn_off, trap->insn_len);
+#endif
                 switch (trap->insn_mnemonic) {
                 case UD_Irdtsc:
                     rdtsc_emulate(hv, trap);
@@ -634,31 +642,25 @@ int rr_handle_vmexits(struct ukvm_hv *hv)
                     break;
 
                 default:
-#ifdef UKVM_MODULE_GDB
-                    return gdb_handle_exit(hv);
-#else
-                    errx(1, "Unhandled trap");
-#endif
+                    errx(1, "Not handled");
                 }
+#ifdef UKVM_MODULE_GDB
+                gdb_handle_exit(hv);
+#endif
                 return 0;
             }
         }
 #ifdef UKVM_MODULE_GDB
-        return gdb_handle_exit(hv);
-#else
-        errx(1, "Unhandled trap");
+        gdb_handle_exit(hv);
 #endif
+        return 0;
     } else {
 #ifdef UKVM_MODULE_GDB
-        return gdb_handle_exit(hv);
-#else
+        gdb_handle_exit(hv);
+#endif
         /* Handle this exit in the vcpu loop */
         return -1;
-#endif
     }
-
-    /* it wasn't an rdtsc */
-    return -1;
 }
 
 static int setup(struct ukvm_hv *hv)
