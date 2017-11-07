@@ -20,6 +20,7 @@
 
 #include "solo5.h"
 #include "../../kernel/lib.c"
+#include "cookies.h"
 
 static void puts(const char *s)
 {
@@ -29,21 +30,23 @@ static void puts(const char *s)
 int rdrand32(unsigned int* result)
 {
   int res = 0;
-  while (res == 0)
-    {
+  while (res == 0) {
       res = __builtin_ia32_rdrand32_step(result);
-    }
+  }
   return (res == 1);
 }
 
 int solo5_app_main(char *cmdline __attribute__((unused)))
 {
-#include "cookies.h"
-    unsigned int rand;
+    unsigned int rand, i;
+    char *cookie;
+
     rdrand32(&rand);
-    // ukvm fails after 83475
+    i = (rand % NUM_COOKIES) - 1;
+    cookie = cookies[i];
+
     puts("{\"type\":\"cookie-out\",\"data\":\"");
-    puts(cookies[rand %  83475 + 30]);
+    puts(cookie);
     puts("\"}\n");
 
     return 0;
