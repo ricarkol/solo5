@@ -79,10 +79,16 @@ void test_decompress(FILE* outFp, FILE* inpFp)
         int  cmpBytes = 0;
 
         {
+            if (feof(inpFp))
+                break;
+
             const size_t readCount0 = read_int(inpFp, &cmpBytes);
             if(readCount0 != 1 || cmpBytes <= 0) {
                 break;
             }
+
+            if (feof(inpFp))
+                break;
 
             const size_t readCount1 = read_bin(inpFp, cmpBuf, (size_t) cmpBytes);
             if(readCount1 != (size_t) cmpBytes) {
