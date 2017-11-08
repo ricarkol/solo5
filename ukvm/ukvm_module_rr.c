@@ -141,6 +141,7 @@ static int init_traps(struct ukvm_hv *hv)
     ud_set_pc(&ud_obj, hv->p_entry);
     ud_set_syntax(&ud_obj, UD_SYN_INTEL);
 
+#if 0
     while (ud_disassemble(&ud_obj)) {
         if (ud_insn_mnemonic(&ud_obj) == UD_Irdtsc ||
             ud_insn_mnemonic(&ud_obj) == UD_Irdrand ||
@@ -169,8 +170,8 @@ static int init_traps(struct ukvm_hv *hv)
             SLIST_INSERT_HEAD(&traps, trap, entries);
         }
     }
+#endif
 
-#if 0
 {
 // mnemonic=rdtsc off=0x100268 len=2
     struct trap_t *trap;
@@ -201,7 +202,6 @@ static int init_traps(struct ukvm_hv *hv)
                             trap->insn_off, trap->insn_len);
     SLIST_INSERT_HEAD(&traps, trap, entries);
 }
-#endif
     return 0;
 }
 
