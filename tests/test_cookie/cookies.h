@@ -1,4 +1,6 @@
 #define NUM_ELEMS(x)  ((sizeof(x) / sizeof((x)[0])))
+
+int a = -1;
 char *cookies[] = {
 "Today it's up to you to create the peacefulness you long for.",
 "A friend asks only for your time not your money.",
@@ -5002,5 +5004,6 @@ char *cookies[] = {
 "Let the deeds speak.",
 "You will be called in to fulfill a position of high honor and responsibility."
 };
+int b = -1;
 
 #define NUM_COOKIES (NUM_ELEMS(cookies))

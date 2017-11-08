@@ -21,15 +21,18 @@
 #include "solo5.h"
 #include "../../kernel/lib.c"
 
-//static void puts(const char *s);
-//int rdrand32(unsigned int* result);
-
 #define NUM_ELEMS(x)  ((sizeof(x) / sizeof((x)[0])))
 
-int a = -1;
 #include "cookies.h"
-int b = -1;
 
+int rdrand32(unsigned int* result)
+{
+  int res = 0;
+  while (res == 0) {
+      res = __builtin_ia32_rdrand32_step(result);
+  }
+  return (res == 1);
+}
 
 int solo5_app_main(char *cmdline __attribute__((unused)))
 {
@@ -39,8 +42,7 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
     char *cookie;
 
     rdrand32(&rand);
-    //i = (rand % last_cookie) + 1;
-    i = (last_cookie);
+    i = (rand % last_cookie) + 1;
     cookie = cookies[i];
 
     puts("{\"type\":\"cookie-out\",\"data\":\"");
