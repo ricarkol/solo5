@@ -147,6 +147,22 @@ size_t strlen(const char *s)
     return s-a;
 }
 
+void puts(const char *s)
+{
+    solo5_console_write(s, strlen(s));
+}
+
+int rdrand32(unsigned int* result)
+{
+  int res = 0;
+  while (res == 0) {
+      res = __builtin_ia32_rdrand32_step(result);
+  }
+  return (res == 1);
+}
+
+
+
 int isspace(int c)
 {
     return c == ' ' || (unsigned)c-'\t' < 5;
