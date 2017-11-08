@@ -50,6 +50,7 @@ SLIST_HEAD(traps_head, trap_t);
 static struct traps_head traps;
 
 int rr_mode = RR_MODE_NONE;
+int rr_stats_on = 0;
 static int rr_fd;
 int rr_pipe[2];
 
@@ -107,7 +108,9 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
         //printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
-        fprintf(stderr, "%s\n", func);
+        if (rr_stats_on) {
+            fprintf(stderr, "%s val=%llu\n", func, *((unsigned long long *)x));
+        }
     }
     if ((l == RR_LOC_OUT) && (rr_mode == RR_MODE_RECORD)) {
         //printf("%s recording val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
@@ -187,12 +190,12 @@ static int init_traps(struct ukvm_hv *hv)
 }
 
 {
-// mnemonic=rdrand rax off=0x10b34d len=3
+// mnemonic=rdrand rax off=0x10b379 len=3
     struct trap_t *trap;
     trap = malloc(sizeof(struct trap_t));
     assert(trap);
     memset(trap, 0, sizeof(struct trap_t));
-    trap->insn_off = 0x10b34d;
+    trap->insn_off = 0x10b379;
     trap->insn_mnemonic = UD_Irdrand;
     trap->insn_len = 3;
     trap->insn_opr[0].size = 64;
@@ -703,6 +706,10 @@ static int handle_cmdarg(char *cmdarg)
     } else if (!strncmp("--replay", cmdarg, 8)) {
         rr_mode = RR_MODE_REPLAY;
         return 0;
+    } else if (!strncmp("--stats", cmdarg, 8)) {
+        rr_mode = RR_MODE_REPLAY;
+        rr_stats_on = 1;
+        return 0;
     } else {
         return -1;
     }
@@ -710,7 +717,7 @@ static int handle_cmdarg(char *cmdarg)
 
 static char *usage(void)
 {
-    return "[--record][--replay]\n";
+    return "[--record][--replay][--stats]\n";
 }
 
 struct ukvm_module ukvm_module_rr = {
