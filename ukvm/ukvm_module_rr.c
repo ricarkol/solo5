@@ -103,7 +103,7 @@ void rr(int l, uint8_t *x, size_t sz, const char *func, int line)
     int ret;
     if ((l == RR_LOC_IN) && (rr_mode == RR_MODE_REPLAY)) {
         ret = read(rr_fd, x, sz);
-        if (ret == 0)
+        if (ret <= 0)
             errx(0, "Reached end of replay\n");
         assert(ret == sz);
         //printf("%s reading val=%llu sz=%zu\n", func, *((unsigned long long *)x), sz);
@@ -376,6 +376,7 @@ void *rr_read()
 
     fclose(outFp);
     fclose(inpFp);
+    close(rr_pipe[1]);
 
     return NULL;
 }
@@ -384,8 +385,10 @@ pthread_t tid;
 
 static void handle_ukvm_exit(void)
 {
-    enqueue(staging, staging_pos);
-    enqueue(NULL, -1);
+    if (rr_mode == RR_MODE_RECORD) {
+        enqueue(staging, staging_pos);
+        enqueue(NULL, -1);
+    }
     close(rr_fd);
     pthread_join(tid, NULL);
 }
