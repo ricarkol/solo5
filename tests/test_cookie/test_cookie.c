@@ -38,12 +38,12 @@ int solo5_app_main(char *cmdline __attribute__((unused)))
 {
     unsigned int rand = -1;
     unsigned int i;
-    unsigned int last_cookie = NUM_ELEMS(cookies);
-    char *cookie;
+    unsigned int num_cookies = NUM_ELEMS(cookies);
+    char cookie[512];
 
     rdrand32(&rand);
-    i = (rand % last_cookie) + 1;
-    cookie = cookies[i];
+    i = (rand % num_cookies) + 1;
+    strcpy(cookie, cookies[i]);
 
     puts("{\"type\":\"cookie-out\",\"data\":\"");
     puts(cookie);
