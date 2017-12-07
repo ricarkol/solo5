@@ -31,7 +31,7 @@ muen: $(MUEN_TARGETS)
 SOLO5_DIR=$(TOP)/kernel
 UKVM_SRC=$(TOP)/ukvm
 
-CFLAGS+=-I$(SOLO5_DIR)
+CFLAGS+=-I$(SOLO5_DIR) -ggdb
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
