@@ -1,6 +1,6 @@
 import pexpect
 
-from utils_test import TIMEOUT, expect, send
+TIMEOUT = 3
 
 
 def test_ukvm_gdb_hello():
@@ -10,29 +10,29 @@ def test_ukvm_gdb_hello():
     ukvm.expect('Waiting for a debugger')
     gdb = pexpect.spawn ('gdb --ex="target remote localhost:8888" %s' % UNIKERNEL, timeout=TIMEOUT)
     ukvm.expect('Connection from debugger at 127.0.0.1')
-    expect(gdb, 'Remote debugging using localhost')
-    send(gdb, 'break solo5_app_main')
-    expect(gdb, 'Breakpoint 1')
-    send(gdb, 'c')
-    expect(gdb, 'Breakpoint 1')
-    send(gdb, 'info local')
-    expect(gdb, 'len =')
-    send(gdb, 's')
-    expect(gdb, 'puts')
-    send(gdb, 'print cmdline')
-    expect(gdb, 'ARG1 ARG2')
-    send(gdb, 'break platform_puts')
-    expect(gdb, 'Breakpoint 2')
-    send(gdb, 'c')
-    expect(gdb, 'Breakpoint 2')
-    send(gdb, 'bt')
-    expect(gdb, 'at test_hello.c:')
-    send(gdb, 'delete 2')
-    expect(gdb, '\n')
-    send(gdb, 'c')
+    gdb.expect('Remote debugging using localhost')
+    gdb.sendline('break solo5_app_main')
+    gdb.expect('Breakpoint 1')
+    gdb.sendline('c')
+    gdb.expect('Breakpoint 1')
+    gdb.sendline('info local')
+    gdb.expect('len =')
+    gdb.sendline('s')
+    gdb.expect('puts')
+    gdb.sendline('print cmdline')
+    gdb.expect('ARG1 ARG2')
+    gdb.sendline('break platform_puts')
+    gdb.expect('Breakpoint 2')
+    gdb.sendline('c')
+    gdb.expect('Breakpoint 2')
+    gdb.sendline('bt')
+    gdb.expect('at test_hello.c:')
+    gdb.sendline('delete 2')
+    gdb.expect('\n')
+    gdb.sendline('c')
     ukvm.expect('Hello, World')
-    expect(gdb, 'exited normally')
-    send(gdb, 'quit')
+    gdb.expect('exited normally')
+    gdb.sendline('quit')
 
 
 def test_ukvm_gdb_hello_quick_exit():
@@ -42,10 +42,10 @@ def test_ukvm_gdb_hello_quick_exit():
     ukvm.expect('Waiting for a debugger')
     gdb = pexpect.spawn ('gdb --ex="target remote localhost:8888" %s' % UNIKERNEL, timeout=TIMEOUT)
     ukvm.expect('Connection from debugger at 127.0.0.1')
-    expect(gdb, 'Remote debugging using localhost')
-    send(gdb, 'quit')
-    expect(gdb, 'Quit anyway?')
-    send(gdb, 'y')
+    gdb.expect('Remote debugging using localhost')
+    gdb.sendline('quit')
+    gdb.expect('Quit anyway?')
+    gdb.sendline('y')
     ukvm.expect('Debugger asked us to quit')
 
 
@@ -56,11 +56,11 @@ def test_ukvm_gdb_hello_continue():
     ukvm.expect('Waiting for a debugger')
     gdb = pexpect.spawn ('gdb --ex="target remote localhost:8888" %s' % UNIKERNEL, timeout=TIMEOUT)
     ukvm.expect('Connection from debugger at 127.0.0.1')
-    expect(gdb, 'Remote debugging using localhost')
-    send(gdb, 'c')
+    gdb.expect('Remote debugging using localhost')
+    gdb.sendline('c')
     ukvm.expect('Hello, World')
-    expect(gdb, 'exited normally')
-    send(gdb, 'quit')
+    gdb.expect('exited normally')
+    gdb.sendline('quit')
 
 
 def _test_ukvm_gdb_cookie():
@@ -70,6 +70,6 @@ def _test_ukvm_gdb_cookie():
     ukvm.expect('Waiting for a debugger')
     gdb = pexpect.spawn ('gdb --ex="target remote localhost:8888" %s' % UNIKERNEL, timeout=TIMEOUT)
     ukvm.expect('Connection from debugger at 127.0.0.1')
-    expect(gdb, 'Remote debugging using localhost')
-    send(gdb, 'c')
+    gdb.expect('Remote debugging using localhost')
+    gdb.sendline('c')
     ukvm.expect('Hello, World')

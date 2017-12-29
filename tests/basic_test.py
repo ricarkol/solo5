@@ -1,10 +1,8 @@
-from os import geteuid
-
 import pexpect
-import time
+from os import geteuid
+from time import sleep
 
-from utils_test import TIMEOUT
-
+TIMEOUT = 3
 VIRTIO = '../tools/run/solo5-run-virtio.sh'
 
 
@@ -32,7 +30,7 @@ def _test_blk(unikernel_cmd):
 
 def _test_ping_serve_flood(unikernel_cmd):
     assert(geteuid() == 0)
-    time.sleep(0.5)  # the tap shows as used if we immediately try to use it
+    sleep(0.5)  # the tap shows as used if we immediately try to use it
     vm = pexpect.spawn(unikernel_cmd, timeout=30)
     vm.expect('Serving ping on 10.0.0.2')
     ping = pexpect.spawn('ping -fq -c 100000 10.0.0.2', timeout=30)
@@ -44,7 +42,7 @@ def _test_ping_serve_flood(unikernel_cmd):
 
 
 def _test_ping_serve(unikernel_cmd):
-    time.sleep(0.5)  # the tap shows as used if we immediately try to use it
+    sleep(0.5)  # the tap shows as used if we immediately try to use it
     vm = pexpect.spawn(unikernel_cmd, timeout=30)
     vm.expect('Serving ping on 10.0.0.2')
     ping = pexpect.spawn('ping -c 5 -i 0.2 10.0.0.2', timeout=30)
@@ -57,7 +55,7 @@ def _test_exit_on_ctrl_c(unikernel_cmd):
     vm = pexpect.spawn(unikernel_cmd, timeout=30)
     vm.expect('Serving ping on 10.0.0.2')
     vm.sendcontrol('c')
-    vm.expect('on signal 2')
+    vm.expect(['[Ee]xiting on signal 2', '[Tt]erminating on signal 2'])
     vm.expect(pexpect.EOF)
     vm.close()
     assert vm.exitstatus in [0, 1, 2, 83]
@@ -65,10 +63,6 @@ def _test_exit_on_ctrl_c(unikernel_cmd):
 
 def test_ukvm_hello():
     _test_expect_success('./test_hello/ukvm-bin test_hello/test_hello.ukvm Hello_Solo5')
-
-
-def test_ukvm_exit_on_ctrl_c():
-    _test_exit_on_ctrl_c('./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm')
 
 
 def test_ukvm_globals():
@@ -102,6 +96,10 @@ def test_ukvm_ping_serve():
     _test_ping_serve('./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm')
 
 
+def test_ukvm_exit_on_ctrl_c():
+    _test_exit_on_ctrl_c('./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm')
+
+
 def test_virtio_quiet():
     (output, status) = pexpect.run('%s -- test_quiet/test_quiet.virtio --solo5:quiet' % VIRTIO,
                                    withexitstatus=True, timeout=TIMEOUT)
@@ -112,10 +110,6 @@ def test_virtio_quiet():
 
 def test_virtio_hello():
     _test_expect_success('%s -- test_hello/test_hello.virtio Hello_Solo5' % VIRTIO)
-
-
-def test_virtio_exit_on_ctrl_c():
-    _test_exit_on_ctrl_c('%s -n tap100 -- test_ping_serve/test_ping_serve.virtio' % VIRTIO)
 
 
 def test_virtio_globals():
@@ -140,3 +134,8 @@ def test_virtio_ping_serve_flood():
 
 def test_virtio_ping_serve():
     _test_ping_serve('%s -n tap100 -- test_ping_serve/test_ping_serve.virtio limit' % VIRTIO)
+
+
+def test_virtio_exit_on_ctrl_c():
+    _test_exit_on_ctrl_c('%s -n tap100 -- test_ping_serve/test_ping_serve.virtio' % VIRTIO)
+
