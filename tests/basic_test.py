@@ -31,10 +31,10 @@ def _test_blk(unikernel_cmd):
 
 def _test_ping_serve_flood(unikernel_cmd):
     sleep(0.5)  # The tap shows as being used if we immediately try to use it
+    vm = pexpect.spawn(unikernel_cmd, timeout=30)
+    vm.expect('Serving ping on 10.0.0.2')
+    ping = pexpect.spawn('ping -fq -c 100000 10.0.0.2', timeout=30)
     try:
-        vm = pexpect.spawn(unikernel_cmd, timeout=30)
-        vm.expect('Serving ping on 10.0.0.2')
-        ping = pexpect.spawn('ping -fq -c 100000 10.0.0.2', timeout=30)
         ping.expect('100000 packets transmitted, 100000 received, 0% packet loss')
         vm.expect('SUCCESS')
         vm.expect(pexpect.EOF)
@@ -46,10 +46,10 @@ def _test_ping_serve_flood(unikernel_cmd):
 
 def _test_ping_serve(unikernel_cmd):
     sleep(0.5)  # The tap shows as being used if we immediately try to use it
+    vm = pexpect.spawn(unikernel_cmd, timeout=30)
+    vm.expect('Serving ping on 10.0.0.2')
+    ping = pexpect.spawn('ping -c 5 -i 0.2 10.0.0.2', timeout=30)
     try:
-        vm = pexpect.spawn(unikernel_cmd, timeout=30)
-        vm.expect('Serving ping on 10.0.0.2')
-        ping = pexpect.spawn('ping -c 5 -i 0.2 10.0.0.2', timeout=30)
         ping.expect('64 bytes from 10.0.0.2: icmp_seq=5')
     finally:
         vm.close()
@@ -57,10 +57,10 @@ def _test_ping_serve(unikernel_cmd):
 
 
 def _test_exit_on_ctrl_c(unikernel_cmd):
+    vm = pexpect.spawn(unikernel_cmd, timeout=30)
+    vm.expect('Serving ping on 10.0.0.2')
+    vm.sendcontrol('c')
     try:
-        vm = pexpect.spawn(unikernel_cmd, timeout=30)
-        vm.expect('Serving ping on 10.0.0.2')
-        vm.sendcontrol('c')
         vm.expect(['[Ee]xiting on signal 2', '[Tt]erminating on signal 2'])
         vm.expect(pexpect.EOF)
     finally:
