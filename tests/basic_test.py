@@ -1,6 +1,7 @@
 import pexpect
 from os import geteuid
 from time import sleep
+from pytest import mark
 
 TIMEOUT = 3
 VIRTIO = '../tools/run/solo5-run-virtio.sh'
@@ -29,36 +30,41 @@ def _test_blk(unikernel_cmd):
 
 
 def _test_ping_serve_flood(unikernel_cmd):
-    assert(geteuid() == 0)
-    sleep(0.5)  # the tap shows as used if we immediately try to use it
-    vm = pexpect.spawn(unikernel_cmd, timeout=30)
-    vm.expect('Serving ping on 10.0.0.2')
-    ping = pexpect.spawn('ping -fq -c 100000 10.0.0.2', timeout=30)
-    ping.expect('100000 packets transmitted, 100000 received, 0% packet loss')
-    vm.expect('SUCCESS')
-    vm.expect(pexpect.EOF)
-    vm.close()
-    assert vm.exitstatus in [0, 2, 83]
+    sleep(0.5)  # The tap shows as being used if we immediately try to use it
+    try:
+        vm = pexpect.spawn(unikernel_cmd, timeout=30)
+        vm.expect('Serving ping on 10.0.0.2')
+        ping = pexpect.spawn('ping -fq -c 100000 10.0.0.2', timeout=30)
+        ping.expect('100000 packets transmitted, 100000 received, 0% packet loss')
+        vm.expect('SUCCESS')
+        vm.expect(pexpect.EOF)
+    finally:
+        vm.close()
+        assert vm.exitstatus in [0, 2, 83]
+        ping.close()
 
 
 def _test_ping_serve(unikernel_cmd):
-    sleep(0.5)  # the tap shows as used if we immediately try to use it
-    vm = pexpect.spawn(unikernel_cmd, timeout=30)
-    vm.expect('Serving ping on 10.0.0.2')
-    ping = pexpect.spawn('ping -c 5 -i 0.2 10.0.0.2', timeout=30)
-    ping.expect('64 bytes from 10.0.0.2: icmp_seq=5')
-    vm.terminate()
-    # the vm process is terminated, so its exit status could be 1
+    sleep(0.5)  # The tap shows as being used if we immediately try to use it
+    try:
+        vm = pexpect.spawn(unikernel_cmd, timeout=30)
+        vm.expect('Serving ping on 10.0.0.2')
+        ping = pexpect.spawn('ping -c 5 -i 0.2 10.0.0.2', timeout=30)
+        ping.expect('64 bytes from 10.0.0.2: icmp_seq=5')
+    finally:
+        vm.close()
+        ping.close()
 
 
 def _test_exit_on_ctrl_c(unikernel_cmd):
-    vm = pexpect.spawn(unikernel_cmd, timeout=30)
-    vm.expect('Serving ping on 10.0.0.2')
-    vm.sendcontrol('c')
-    vm.expect(['[Ee]xiting on signal 2', '[Tt]erminating on signal 2'])
-    vm.expect(pexpect.EOF)
-    vm.close()
-    assert vm.exitstatus in [0, 1, 2, 83]
+    try:
+        vm = pexpect.spawn(unikernel_cmd, timeout=30)
+        vm.expect('Serving ping on 10.0.0.2')
+        vm.sendcontrol('c')
+        vm.expect(['[Ee]xiting on signal 2', '[Tt]erminating on signal 2'])
+        vm.expect(pexpect.EOF)
+    finally:
+        vm.close()
 
 
 def test_ukvm_hello():
@@ -88,6 +94,7 @@ def test_ukvm_quiet():
     assert status in [0]
 
 
+@mark.skipif(geteuid() != 0, reason='Requires root for ping -f')
 def test_ukvm_ping_serve_flood():
     _test_ping_serve_flood('./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm limit')
 
@@ -128,6 +135,7 @@ def test_virtio_blk():
     _test_blk('%s -d /tmp/disk.img -- test_blk/test_blk.virtio' % VIRTIO)
 
 
+@mark.skipif(geteuid() != 0, reason='Requires root for ping -f')
 def test_virtio_ping_serve_flood():
     _test_ping_serve_flood('%s -n tap100 -- test_ping_serve/test_ping_serve.virtio limit' % VIRTIO)
 

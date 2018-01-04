@@ -1,4 +1,5 @@
 import pexpect
+import pytest
 
 TIMEOUT = 3
 
@@ -35,7 +36,7 @@ def test_ukvm_gdb_hello():
     gdb.sendline('quit')
 
 
-def test_ukvm_gdb_hello_quick_exit():
+def test_ukvm_gdb_hello_quit_from_gdb():
     UKVM_BIN = '%s/ukvm-bin' % 'test_hello'
     UNIKERNEL = '%s/%s.ukvm' % ('test_hello', 'test_hello')
     ukvm = pexpect.spawn ('%s --gdb --gdb-port=8888 %s ARG1 ARG2' % (UKVM_BIN, UNIKERNEL), timeout=TIMEOUT)
@@ -49,6 +50,25 @@ def test_ukvm_gdb_hello_quick_exit():
     ukvm.expect('Debugger asked us to quit')
 
 
+@pytest.mark.skipif(reason='Not implemented (yet)')
+def test_ukvm_gdb_hello_exit_with_control_c():
+    UKVM_BIN = '%s/ukvm-bin' % 'test_hello'
+    UNIKERNEL = '%s/%s.ukvm' % ('test_hello', 'test_hello')
+
+    ukvm = pexpect.spawn ('%s --gdb --gdb-port=8888 %s ARG1 ARG2' % (UKVM_BIN, UNIKERNEL), timeout=TIMEOUT)
+    ukvm.expect('Waiting for a debugger')
+
+    gdb = pexpect.spawn ('gdb --ex="target remote localhost:8888" %s' % UNIKERNEL, timeout=TIMEOUT)
+    ukvm.expect('Connection from debugger at 127.0.0.1')
+
+    ukvm.sendcontrol('c')
+    ukvm.expect('Exiting on signal 2')
+    ukvm.expect(pexpect.EOF)
+
+    gdb.expect('\[Inferior 1 \(Remote target\) exited normally\]')
+    gdb.sendline('quit')
+
+
 def test_ukvm_gdb_hello_continue():
     UKVM_BIN = '%s/ukvm-bin' % 'test_hello'
     UNIKERNEL = '%s/%s.ukvm' % ('test_hello', 'test_hello')
@@ -59,7 +79,7 @@ def test_ukvm_gdb_hello_continue():
     gdb.expect('Remote debugging using localhost')
     gdb.sendline('c')
     ukvm.expect('Hello, World')
-    gdb.expect('exited normally')
+    gdb.expect('\[Inferior 1 \(Remote target\) exited normally\]')
     gdb.sendline('quit')
 
 
