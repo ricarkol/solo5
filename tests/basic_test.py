@@ -1,11 +1,15 @@
 import pexpect
-from os import geteuid
+import os
 from time import sleep
 from pytest import mark
 
+TESTS_DIR = os.path.join(os.path.dirname( __file__ ))
+if TESTS_DIR != os.getcwd():
+    print 'Please run from %s' % TESTS_DIR
+    exit(1)
+
 TIMEOUT = 3
 VIRTIO = '../tools/run/solo5-run-virtio.sh'
-
 
 def _test_expect_success(unikernel_cmd):
     (output, status) = pexpect.run(unikernel_cmd, withexitstatus=True, timeout=TIMEOUT)
@@ -94,7 +98,7 @@ def test_ukvm_quiet():
     assert status in [0]
 
 
-@mark.skipif(geteuid() != 0, reason='Requires root for ping -f')
+@mark.skipif(os.geteuid() != 0, reason='Requires root for ping -f')
 def test_ukvm_ping_serve_flood():
     _test_ping_serve_flood('./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm limit')
 
@@ -135,7 +139,7 @@ def test_virtio_blk():
     _test_blk('%s -d /tmp/disk.img -- test_blk/test_blk.virtio' % VIRTIO)
 
 
-@mark.skipif(geteuid() != 0, reason='Requires root for ping -f')
+@mark.skipif(os.geteuid() != 0, reason='Requires root for ping -f')
 def test_virtio_ping_serve_flood():
     _test_ping_serve_flood('%s -n tap100 -- test_ping_serve/test_ping_serve.virtio limit' % VIRTIO)
 
