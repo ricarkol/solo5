@@ -1,5 +1,5 @@
 import pexpect
-import pytest
+from pytest import mark
 import os
 from time import sleep
 
@@ -8,9 +8,10 @@ if TESTS_DIR != os.getcwd():
     print 'Please run from %s' % TESTS_DIR
     exit(1)
 
-TIMEOUT = 3
+TIMEOUT = 5
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_gdb_hello():
     UKVM_BIN = '%s/ukvm-bin' % 'test_hello'
     UNIKERNEL = '%s/%s.ukvm' % ('test_hello', 'test_hello')
@@ -48,6 +49,7 @@ def test_ukvm_gdb_hello():
         gdb.close()
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_gdb_hello_quit_from_gdb():
     UKVM_BIN = '%s/ukvm-bin' % 'test_hello'
     UNIKERNEL = '%s/%s.ukvm' % ('test_hello', 'test_hello')
@@ -67,7 +69,8 @@ def test_ukvm_gdb_hello_quit_from_gdb():
         gdb.close()
 
 
-@pytest.mark.skipif(reason='Not implemented (yet)')
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
+@mark.skipif(reason='Not implemented (yet)')
 def test_ukvm_gdb_hello_exit_with_control_c():
     UKVM_BIN = '%s/ukvm-bin' % 'test_hello'
     UNIKERNEL = '%s/%s.ukvm' % ('test_hello', 'test_hello')

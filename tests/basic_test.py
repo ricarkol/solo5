@@ -71,26 +71,32 @@ def _test_exit_on_ctrl_c(unikernel_cmd):
         vm.close()
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_hello():
     _test_expect_success('./test_hello/ukvm-bin test_hello/test_hello.ukvm Hello_Solo5')
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_globals():
     _test_expect_success('./test_globals/ukvm-bin test_globals/test_globals.ukvm')
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_fpu():
     _test_expect_success('./test_fpu/ukvm-bin test_fpu/test_fpu.ukvm')
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_exception():
     _test_expect_abort('./test_exception/ukvm-bin test_exception/test_exception.ukvm')
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_blk():
     _test_blk('./test_blk/ukvm-bin --disk=/tmp/disk.img -- test_blk/test_blk.ukvm')
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 def test_ukvm_quiet():
     (output, status) = pexpect.run('./test_quiet/ukvm-bin test_quiet/test_quiet.ukvm --solo5:quiet',
                                    withexitstatus=True, timeout=TIMEOUT)
@@ -98,6 +104,7 @@ def test_ukvm_quiet():
     assert status in [0]
 
 
+@mark.skipif(not os.path.exists('/dev/kvm'), reason='/dev/kvm is needed for ukvm')
 @mark.skipif(os.geteuid() != 0, reason='Requires root for ping -f')
 def test_ukvm_ping_serve_flood():
     _test_ping_serve_flood('./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm limit')
