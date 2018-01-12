@@ -176,7 +176,6 @@ int main(int argc, char **argv)
     setup_cmdline(cmdline, argc, argv);
 
     setup_modules(hv);
-
     ukvm_hv_vcpu_loop(hv);
 
     return 0;
