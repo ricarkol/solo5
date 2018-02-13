@@ -1,0 +1,21 @@
+#!/usr/bin/expect
+
+spawn ./test_ping_serve/ukvm-bin --net=tap100 test_ping_serve/test_ping_serve.ukvm limit
+set vm_id $spawn_id
+
+expect -i $vm_id "Serving ping on 10.0.0.2"
+
+spawn ping -fq -c 100000 10.0.0.2
+set ping_id $spawn_id
+
+expect {
+	-i $ping_id "100000 packets transmitted, 100000 received, 0% packet loss" {}
+	default {puts "Timed out waiting for packets transmitted"; exit 1}
+}
+
+expect {
+	-i $vm_id "SUCCESS" {}
+	default {puts "Timed out waiting for SUCCESS"; exit 1}
+}
+
+exit 0
