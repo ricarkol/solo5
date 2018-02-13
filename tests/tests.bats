@@ -117,3 +117,12 @@ teardown() {
   [ "$status" -eq 0 -o "$status" -eq 2 -o "$status" -eq 83 ]
   [[ "$output" == *"SUCCESS"* ]]
 }
+
+@test "ping_serve ukvm using expect" {
+  [ $(id -u) -ne 0 ] && skip "Need root to run this test, for ping -f"
+
+  run expect test_ping_serve.exp
+
+  echo "$output"
+  [ "$status" -eq 0 ]
+}

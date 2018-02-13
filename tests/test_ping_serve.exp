@@ -10,12 +10,12 @@ set ping_id $spawn_id
 
 expect {
 	-i $ping_id "100000 packets transmitted, 100000 received, 0% packet loss" {}
-	default {puts "Timed out waiting for packets transmitted"; exit 1}
+	default {exit 1}
 }
 
 expect {
 	-i $vm_id "SUCCESS" {}
-	default {puts "Timed out waiting for SUCCESS"; exit 1}
+	default {exit 1}
 }
 
 exit 0
