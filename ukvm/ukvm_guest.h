@@ -69,6 +69,7 @@ static inline void ukvm_do_hypercall(int n, volatile void *arg)
 #ifdef __UKVM_LINUX__
     uint64_t hcaddr = *((uint64_t *)LINUX_HYPERCALL_ADDRESS);
     void (*_hc)(int,void *) = (void (*)(int, void *))hcaddr;
+
     _hc(n, (void *)arg);
 #else    
 

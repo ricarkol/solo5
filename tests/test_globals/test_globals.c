@@ -32,6 +32,12 @@ static void puts(const char *s)
 
 char s[] = "RUCCESS\n";
 
+__thread int data0;
+__thread int data1;
+__thread int data2;
+__thread int data3;
+__thread int data4;
+
 void do_test(void)
 {
     s[0]++;
@@ -40,6 +46,11 @@ void do_test(void)
 
 int solo5_app_main(const struct solo5_start_info *si __attribute__((unused)))
 {
+    data0 = 0; // tihs should freak out libc
+    data1 = 0; // tihs should freak out libc
+    data2 = 0; // tihs should freak out libc
+    data3 = 0; // tihs should freak out libc
+    data4 = 0; // tihs should freak out libc
     puts("\n**** Solo5 standalone test_globals ****\n\n");
 
     do_test();

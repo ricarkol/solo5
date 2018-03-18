@@ -35,6 +35,12 @@
 #include <stdio.h>
 #include <poll.h>
 
+/* for stashing and restoring %fs */
+#include <asm/prctl.h>
+#include <sys/prctl.h>
+
+int arch_prctl(int code, unsigned long addr);
+
 /* for seccomp */
 #include <seccomp.h> /* from libseccomp-dev */
 #include "seccomp-bpf.h"
@@ -45,6 +51,10 @@
 
 #include "ukvm.h"
 #include "ukvm_hv_linux.h"
+
+
+static unsigned long unikernel_fs;
+static unsigned long libc_fs;
 
 void ukvm_hv_mem_size(size_t *mem_size) {
     ukvm_x86_mem_size(mem_size);
@@ -230,6 +240,9 @@ static void ukvm_hv_handle_exit(int nr, void *arg)
 {
     struct ukvm_hv *hv = loop_hv;
 
+    arch_prctl(ARCH_GET_FS, (unsigned long)&unikernel_fs);
+    arch_prctl(ARCH_SET_FS, libc_fs);
+
     /* Guest has halted the CPU. */
     if (nr == UKVM_HYPERCALL_HALT) {
         ukvm_gpa_t gpa = (ukvm_gpa_t)arg;
@@ -242,7 +255,7 @@ static void ukvm_hv_handle_exit(int nr, void *arg)
     for (ukvm_vmexit_fn_t *fn = ukvm_core_vmexits; *fn && !handled; fn++)
         handled = ((*fn)(hv) == 0);
     if (handled)
-        return;
+        goto out;
 
     if (nr <= 0 || nr >= (UKVM_HYPERCALL_MAX))
         errx(1, "Invalid guest port access: port=0x%x", nr);
@@ -253,4 +266,8 @@ static void ukvm_hv_handle_exit(int nr, void *arg)
     
     ukvm_gpa_t gpa = (ukvm_gpa_t)arg;
     fn(hv, gpa);
+
+out:
+    arch_prctl(ARCH_GET_FS, (unsigned long)&libc_fs);
+    arch_prctl(ARCH_SET_FS, unikernel_fs);
 }
