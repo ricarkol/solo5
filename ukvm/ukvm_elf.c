@@ -235,8 +235,11 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
             /* XXX: remove the PROT_EXEC */
             void *addr = mmap((void *)aligned_filesz_end, _end - aligned_filesz_end,
                             PROT_READ|PROT_WRITE|PROT_EXEC,
-                            MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             assert((off_t)addr == aligned_filesz_end);
+            if (madvise((void *)aligned_filesz_end,  _end - aligned_filesz_end,
+                        MADV_MERGEABLE) != 0)
+                err(1, "Error with madvise MADV_MERGEABLE");
         }
         memset(daddr + filesz, 0, memsz - filesz);
     }
@@ -245,8 +248,11 @@ void ukvm_elf_load(const char *file, uint8_t *mem, size_t mem_size,
     /* XXX: remove the PROT_EXEC */
     void *addr = mmap((void *)_end, mem_size - _end,
                       PROT_READ|PROT_WRITE|PROT_EXEC,
-                      MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assert((off_t)addr == _end);
+    if (madvise((void *)_end, mem_size - _end,
+                MADV_MERGEABLE) != 0)
+        err(1, "Error with madvise MADV_MERGEABLE");
 
     free (phdr);
     close (fd_kernel);

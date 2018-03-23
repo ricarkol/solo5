@@ -121,9 +121,13 @@ struct ukvm_hv *ukvm_hv_init(size_t mem_size)
     // 0x100000 is the ELF minimal offset location
     hvb->realmem = mmap((void *)LINUX_MAP_ADDRESS, 0x100000 - LINUX_MAP_ADDRESS,
                         PROT_READ | PROT_WRITE,
-                        MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (hvb->realmem == MAP_FAILED)
         err(1, "Error allocating guest memory");
+
+    if (madvise((void *)LINUX_MAP_ADDRESS,
+                0x100000 - LINUX_MAP_ADDRESS, MADV_MERGEABLE) != 0)
+        err(1, "Error with madvise MADV_MERGEABLE");
 
     hvb->realmem = (void *)LINUX_MAP_ADDRESS;
     assert((uint64_t)hvb->realmem == LINUX_MAP_ADDRESS);
