@@ -232,6 +232,7 @@ typedef uint64_t solo5_off_t;
 struct solo5_block_info {
     solo5_off_t capacity;       /* Capacity of block device, bytes */
     solo5_off_t block_size;     /* Minimum I/O unit (block size), bytes */
+    uint8_t *diskmem;           /* Memory mapped disk */
 };
 
 /*

@@ -51,6 +51,27 @@ bool check_one_block(solo5_off_t offset, size_t block_size)
     return true;
 }
 
+bool check_one_block_mmap(solo5_off_t offset, size_t block_size, uint8_t *diskmem)
+{
+    size_t i;
+    uint8_t wbuf[block_size];
+
+    for (i = 0; i < block_size; i++) {
+        wbuf[i] = '0' + i % 10;
+    }
+
+    if (solo5_block_write(offset, wbuf, block_size) != SOLO5_R_OK)
+        return false;
+
+    for (i = 0; i < block_size; i++) {
+        if (diskmem[offset + i] != '0' + i % 10)
+            /* Check failed */
+            return false;
+    }
+
+    return true;
+}
+
 int solo5_app_main(const struct solo5_start_info *si __attribute__((unused)))
 {
     puts("\n**** Solo5 standalone test_blk ****\n\n");
@@ -64,6 +85,9 @@ int solo5_app_main(const struct solo5_start_info *si __attribute__((unused)))
     for (solo5_off_t offset = 0; offset < bi.capacity;
             offset += (10 * bi.block_size)) {
         if (!check_one_block(offset, bi.block_size))
+            /* Check failed */
+            return 1;
+        if (!check_one_block_mmap(offset, bi.block_size, bi.diskmem))
             /* Check failed */
             return 1;
     }

@@ -37,6 +37,7 @@ static void init_block_info(void)
 
     block_info.block_size = bi.sector_size;
     block_info.capacity = bi.num_sectors * bi.sector_size;
+    block_info.diskmem = (uint8_t *)bi.diskmem;
 }
 
 solo5_result_t solo5_block_write(solo5_off_t offset, const uint8_t *buf,

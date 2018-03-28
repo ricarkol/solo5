@@ -30,12 +30,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "ukvm.h"
 
 static struct ukvm_blkinfo blkinfo;
 static char *diskfile;
 int diskfd;
+char *diskmem;
 
 static void hypercall_blkinfo(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 {
@@ -45,13 +47,13 @@ static void hypercall_blkinfo(struct ukvm_hv *hv, ukvm_gpa_t gpa)
     info->sector_size = blkinfo.sector_size;
     info->num_sectors = blkinfo.num_sectors;
     info->rw = blkinfo.rw;
+    info->diskmem = (ukvm_gpa_t)diskmem;
 }
 
 static void hypercall_blkwrite(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 {
     struct ukvm_blkwrite *wr =
         UKVM_CHECKED_GPA_P(hv, gpa, sizeof (struct ukvm_blkwrite));
-    ssize_t ret;
     off_t pos, end;
 
     assert(wr->len <= SSIZE_MAX);
@@ -66,9 +68,7 @@ static void hypercall_blkwrite(struct ukvm_hv *hv, ukvm_gpa_t gpa)
         return;
     }
 
-    ret = pwrite(diskfd, UKVM_CHECKED_GPA_P(hv, wr->data, wr->len), wr->len,
-            pos);
-    assert(ret == wr->len);
+    memcpy(diskmem + pos, UKVM_CHECKED_GPA_P(hv, wr->data, wr->len), wr->len);
     wr->ret = 0;
 }
 
@@ -76,7 +76,6 @@ static void hypercall_blkread(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 {
     struct ukvm_blkread *rd =
         UKVM_CHECKED_GPA_P(hv, gpa, sizeof (struct ukvm_blkread));
-    ssize_t ret;
     off_t pos, end;
 
     assert(rd->len <= SSIZE_MAX);
@@ -91,9 +90,7 @@ static void hypercall_blkread(struct ukvm_hv *hv, ukvm_gpa_t gpa)
         return;
     }
 
-    ret = pread(diskfd, UKVM_CHECKED_GPA_P(hv, rd->data, rd->len), rd->len,
-            pos);
-    assert(ret == rd->len);
+    memcpy(UKVM_CHECKED_GPA_P(hv, rd->data, rd->len), diskmem + pos, rd->len);
     rd->ret = 0;
 }
 
@@ -108,6 +105,8 @@ static int handle_cmdarg(char *cmdarg)
 
 static int setup(struct ukvm_hv *hv)
 {
+    off_t size;
+
     if (diskfile == NULL)
         return -1;
 
@@ -117,8 +116,15 @@ static int setup(struct ukvm_hv *hv)
         err(1, "Could not open disk: %s", diskfile);
 
     blkinfo.sector_size = 512;
-    blkinfo.num_sectors = lseek(diskfd, 0, SEEK_END) / 512;
+    size = lseek(diskfd, 0, SEEK_END);
+    blkinfo.num_sectors = size / 512;
     blkinfo.rw = 1;
+
+    /* XXX: does it really has to be EXEC? */
+    diskmem = mmap(0, size, PROT_READ|PROT_WRITE|PROT_EXEC,
+                   MAP_PRIVATE, diskfd, 0);
+    if (diskmem == MAP_FAILED)
+        err(1, "mmap");
 
     assert(ukvm_core_register_hypercall(UKVM_HYPERCALL_BLKINFO,
                 hypercall_blkinfo) == 0);

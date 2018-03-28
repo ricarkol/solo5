@@ -80,7 +80,7 @@ static ssize_t pread_in_full(int fd, void *buf, size_t count, off_t offset, int 
 #else
             addr = mmap(p, count,
                         PROT_READ|PROT_WRITE|PROT_EXEC,
-                        MAP_SHARED|MAP_ANONYMOUS,
+                        MAP_PRIVATE|MAP_ANONYMOUS,
                         -1, 0);
             assert((off_t)addr == (off_t)p);
             nr = pread(fd, p, count, offset);

@@ -206,6 +206,7 @@ struct ukvm_blkinfo {
     /* OUT */
     size_t sector_size;
     size_t num_sectors;
+    UKVM_GUEST_PTR(const char *) diskmem;
     int rw;
 };
 
