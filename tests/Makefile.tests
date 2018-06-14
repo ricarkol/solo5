@@ -46,6 +46,7 @@ Makefile.ukvm: $(UKVM_SRC)/ukvm-configure
 %.ukvm: %.o $(SOLO5_DIR)/ukvm/solo5.lds $(SOLO5_DIR)/ukvm/solo5.o
 	$(LD) -T $(SOLO5_DIR)/ukvm/solo5.lds \
 			 $(LDFLAGS) -o $@ $(SOLO5_DIR)/ukvm/solo5.o $< $(LDLIBS)
+	ln $@ $(@:.ukvm=.nabla)
 
 $(SOLO5_DIR)/ukvm/solo5.o: 
 	$(MAKE) -C $(SOLO5_DIR) ukvm
@@ -69,4 +70,4 @@ $(SOLO5_DIR)/virtio/solo5.o:
 
 .PHONY: clean ukvm-clean
 clean: ukvm-clean
-	$(RM) *.o $(UKVM_TARGETS) Makefile.ukvm $(VIRTIO_TARGETS)
+	$(RM) *.o $(UKVM_TARGETS) Makefile.ukvm $(VIRTIO_TARGETS) *.nabla
