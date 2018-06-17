@@ -82,7 +82,26 @@ static int tap_attach(const char *ifname)
         if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
             return -1;
 
-        if (ioctl(fd, TUNGETIFF, (void *)&ifr) == 0) {
+	if (ioctl(fd, TUNGETIFF, (void *)&ifr) == 0) {
+            // Based on https://stackoverflow.com/questions/28844825/sending-packet-through-linux-macvtap-interface
+            ifr.ifr_flags &= ~IFF_VNET_HDR;
+            ioctl(fd, TUNSETIFF, (void *)&ifr);
+        }
+
+        return fd;
+    }
+
+    if (strncmp(ifname, "/dev/tap", 8) == 0) {
+        struct ifreq ifr;
+
+        fd = open(ifname, O_RDWR);
+        if (fd == -1)
+            return -1;
+
+        if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
+            return -1;
+
+	if (ioctl(fd, TUNGETIFF, (void *)&ifr) == 0) {
             // Based on https://stackoverflow.com/questions/28844825/sending-packet-through-linux-macvtap-interface
             ifr.ifr_flags &= ~IFF_VNET_HDR;
             ioctl(fd, TUNSETIFF, (void *)&ifr);
