@@ -85,7 +85,7 @@ add_module ()
     add_cflags "${enableit}"
 }
 
-UKVM_CFLAGS=
+UKVM_CFLAGS=" -mcmodel=large"
 UKVM_LDFLAGS="-T ${UKVM_SRC}/ukvm.lds -z execstack"
 UKVM_LDLIBS=
 UKVM_HEADERS=

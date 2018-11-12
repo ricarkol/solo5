@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "ukvm.h"
 
@@ -106,10 +107,19 @@ static int handle_cmdarg(char *cmdarg)
     return 0;
 }
 
+extern char the_end;
+void *addr;
+
 static int setup(struct ukvm_hv *hv)
 {
     if (diskfile == NULL)
         return -1;
+
+    addr = mmap(&the_end, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+    assert(addr == &the_end);
+
+    the_end = 'a';
+    printf("%p %c\n", addr, the_end);
 
     /* set up virtual disk */
     diskfd = open(diskfile, O_RDWR);

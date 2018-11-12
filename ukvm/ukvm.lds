@@ -188,6 +188,11 @@ SECTIONS
     *(.ldata .ldata.* .gnu.linkonce.l.*)
     . = ALIGN(. != 0 ? 64 / 8 : 1);
   }
+
+  the_beginning = .;
+  . = ALIGN(128*1024*1024*1024); /* 128 GB */
+  the_end = .;
+
   . = ALIGN(64 / 8);
   _end = .; PROVIDE (end = .);
   . = DATA_SEGMENT_END (.);
@@ -231,4 +236,9 @@ SECTIONS
   .debug_macro    0 : { *(.debug_macro) }
   .gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }
   /DISCARD/ : { *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) }
+
+  .LastSection (NOLOAD): /* for test in dump file */
+  {
+    . = ALIGN(1*1024*1024*1024); /* 128 GB */
+  }
 }
