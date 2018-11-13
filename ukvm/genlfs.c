@@ -140,6 +140,34 @@ int genlfs(char *directory, char *image) {
 	return 0;
 }
 
+int memlfs(char *directory, void *dest, off_t size) {
+	struct fs fs;
+	char cwd[PATH_MAX];
+	char image[] = "test.lfs";
+
+	assert(getcwd(cwd, sizeof(cwd)) != NULL);
+
+	fs.fd = open(image, O_CREAT | O_RDWR, DEFFILEMODE);
+	assert(fs.fd != 0);
+
+	init_lfs(&fs, size);
+
+	if (chdir(directory) != 0)
+		return 1;
+
+	walk(&fs, ULFS_ROOTINO, ULFS_ROOTINO);
+
+	write_ifile(&fs);
+	write_superblock(&fs);
+	write_segment_summary(&fs);
+
+	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+			MAP_PRIVATE, fs.fd, 0) == dest);
+
+	chdir(cwd);
+	return 0;
+}
+
 int main2(int argc, char **argv) {
 	if (argc != 3) {
 		errx(1, "Usage: %s <directory> <image>", argv[0]);
