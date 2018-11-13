@@ -171,11 +171,16 @@ SECTIONS
       pad the .data section.  */
    . = ALIGN(. != 0 ? 64 / 8 : 1);
   }
+
+  . = ALIGN(4096);
   .lbss   :
   {
     *(.dynlbss)
     *(.lbss .lbss.* .gnu.linkonce.lb.*)
     *(LARGE_COMMON)
+   the_beginning = .;
+    . = ALIGN(128*1024*1024*1024); /* 128 GB */
+    the_end = .;
   }
   . = ALIGN(64 / 8);
   . = SEGMENT_START("ldata-segment", .);
@@ -189,11 +194,7 @@ SECTIONS
     . = ALIGN(. != 0 ? 64 / 8 : 1);
   }
 
-  the_beginning = .;
-  . = ALIGN(128*1024*1024*1024); /* 128 GB */
-  the_end = .;
-
-  . = ALIGN(64 / 8);
+    . = ALIGN(64 / 8);
   _end = .; PROVIDE (end = .);
   . = DATA_SEGMENT_END (.);
   /* Stabs debugging sections.  */
@@ -236,9 +237,4 @@ SECTIONS
   .debug_macro    0 : { *(.debug_macro) }
   .gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }
   /DISCARD/ : { *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) }
-
-  .LastSection (NOLOAD): /* for test in dump file */
-  {
-    . = ALIGN(1*1024*1024*1024); /* 128 GB */
-  }
 }
