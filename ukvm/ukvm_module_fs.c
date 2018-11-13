@@ -31,6 +31,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdlib.h>
 
 #include "ukvm.h"
 
@@ -100,29 +101,40 @@ static void hypercall_blkread(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 
 static int handle_cmdarg(char *cmdarg)
 {
-    if (strncmp("--disk=", cmdarg, 7))
+    if (strncmp("--dir=", cmdarg, 6))
         return -1;
-    diskfile = cmdarg + 7;
+    diskfile = cmdarg + 6;
 
     return 0;
 }
 
-extern char the_end;
+extern char the_beginning;
 void *addr;
 
 static int setup(struct ukvm_hv *hv)
 {
+    char cmd[256];
+
     if (diskfile == NULL)
         return -1;
 
-    addr = mmap(&the_end, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
-    assert(addr == &the_end);
+    assert((uint64_t)&the_beginning % 4096 == 0);
 
-    the_end = 'a';
-    printf("%p %c\n", addr, the_end);
+    uint64_t maddr;
+    for (maddr = (uint64_t)&the_beginning;
+		maddr < ((uint64_t)&the_beginning + 128*1024*1024*1024ULL);
+		maddr += 1024*1024*1024ULL) {
+	    addr = mmap((void *)maddr, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+	    the_beginning = 'a';
+	    printf("%p==%p %c\n", addr, (void*)maddr, the_beginning);
+	    assert(addr == (void *)maddr);
+    }
+
+    sprintf(cmd, "./genlfs %s test.lfs", diskfile);
+    assert(system(cmd) == 0);
 
     /* set up virtual disk */
-    diskfd = open(diskfile, O_RDWR);
+    diskfd = open("test.lfs", O_RDWR);
     if (diskfd == -1)
         err(1, "Could not open disk: %s", diskfile);
 
@@ -142,7 +154,7 @@ static int setup(struct ukvm_hv *hv)
 
 static char *usage(void)
 {
-    return "--disk=IMAGE (file exposed to the unikernel as a raw block device)";
+    return "--dir=PATH (path exposed to the unikernel to be converted to a raw block device)";
 }
 
 static int get_fd(void)

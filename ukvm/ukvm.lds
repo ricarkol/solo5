@@ -178,10 +178,16 @@ SECTIONS
     *(.dynlbss)
     *(.lbss .lbss.* .gnu.linkonce.lb.*)
     *(LARGE_COMMON)
-   the_beginning = .;
-    . = ALIGN(128*1024*1024*1024); /* 128 GB */
+  }
+
+   . = ALIGN(1024*1024*1024);
+  .memfs   :
+  {
+    the_beginning = .;
+    . = ALIGN(128*1*1024*1024); /* 128 GB (these numbers are longs) */
     the_end = .;
   }
+
   . = ALIGN(64 / 8);
   . = SEGMENT_START("ldata-segment", .);
   .lrodata   ALIGN(CONSTANT (MAXPAGESIZE)) + (. & (CONSTANT (MAXPAGESIZE) - 1)) :
