@@ -28,7 +28,7 @@ int get_next_inum(void) { return ++next_inum; }
    DT_UNKNOWN  The file type is unknown.
    */
 
-void walk(struct fs *fs, int parent_inum, int inum) {
+void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 	DIR *d;
 	struct dirent *dirent;
 	struct directory *dir = calloc(1, sizeof(struct directory));
@@ -68,7 +68,7 @@ void walk(struct fs *fs, int parent_inum, int inum) {
 				      LFS_DT_DIR) == 0);
 			printf("directory (%d): %s\n", next_inum, dirent->d_name);
 			chdir(dirent->d_name);
-			walk(fs, inum, next_inum);
+			walk(dest, fs, inum, next_inum);
 			chdir("..");
 			break;
 		case S_IFIFO:
@@ -114,32 +114,6 @@ void walk(struct fs *fs, int parent_inum, int inum) {
 	closedir(d);
 }
 
-int genlfs(char *directory, char *image) {
-	struct fs fs;
-	uint64_t nbytes = 1024 * 1024 * 1024 * 4ULL;
-	char cwd[PATH_MAX];
-
-	assert(getcwd(cwd, sizeof(cwd)) != NULL);
-
-	fs.fd = open(image, O_CREAT | O_RDWR, DEFFILEMODE);
-	assert(fs.fd != 0);
-
-	init_lfs(&fs, nbytes);
-
-	if (chdir(directory) != 0)
-		return 1;
-
-	walk(&fs, ULFS_ROOTINO, ULFS_ROOTINO);
-
-	write_ifile(&fs);
-	write_superblock(&fs);
-	write_segment_summary(&fs);
-	assert(close(fs.fd) == 0);
-
-	chdir(cwd);
-	return 0;
-}
-
 int memlfs(char *directory, void *dest, off_t size) {
 	struct fs fs;
 	char cwd[PATH_MAX];
@@ -155,7 +129,7 @@ int memlfs(char *directory, void *dest, off_t size) {
 	if (chdir(directory) != 0)
 		return 1;
 
-	walk(&fs, ULFS_ROOTINO, ULFS_ROOTINO);
+	walk(dest, &fs, ULFS_ROOTINO, ULFS_ROOTINO);
 
 	write_ifile(&fs);
 	write_superblock(&fs);
@@ -166,12 +140,4 @@ int memlfs(char *directory, void *dest, off_t size) {
 
 	chdir(cwd);
 	return 0;
-}
-
-int main2(int argc, char **argv) {
-	if (argc != 3) {
-		errx(1, "Usage: %s <directory> <image>", argv[0]);
-	}
-
-	return genlfs(argv[1], argv[2]);
 }
