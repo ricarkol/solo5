@@ -77,11 +77,19 @@ add_ldlib ()
 
 add_module ()
 {
-    if [ ! -f ${UKVM_SRC}/ukvm_module_$1.c ]; then
-        die "Invalid module: $1"
+    if [ "$1" = 'blk' ]; then
+        if [ ! -f ${UKVM_SRC}/ukvm_module_fs.c ]; then
+            die "Invalid module: $1"
+        fi
+        enableit="-DUKVM_MODULE_$(echo $1 | tr '[a-z]' '[A-Z]')"
+        add_obj "ukvm_module_fs.o"
+    else  
+        if [ ! -f ${UKVM_SRC}/ukvm_module_$1.c ]; then
+            die "Invalid module: $1"
+        fi
+        enableit="-DUKVM_MODULE_$(echo $1 | tr '[a-z]' '[A-Z]')"
+        add_obj "ukvm_module_$1.o"
     fi
-    enableit="-DUKVM_MODULE_$(echo $1 | tr '[a-z]' '[A-Z]')"
-    add_obj "ukvm_module_$1.o"
     add_cflags "${enableit}"
 }
 
