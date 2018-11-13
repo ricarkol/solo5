@@ -108,7 +108,7 @@ static int handle_cmdarg(char *cmdarg)
     return 0;
 }
 
-extern char the_beginning;
+extern char memlfs_start;
 void *addr;
 
 extern int genlfs(char *directory, char *image);
@@ -118,20 +118,18 @@ static int setup(struct ukvm_hv *hv)
     if (diskfile == NULL)
         return -1;
 
-    assert((uint64_t)&the_beginning % 4096 == 0);
+    assert((uint64_t)&memlfs_start % 4096 == 0);
 
     uint64_t maddr;
-    for (maddr = (uint64_t)&the_beginning;
-		maddr < ((uint64_t)&the_beginning + 128*1024*1024*1024ULL);
+    for (maddr = (uint64_t)&memlfs_start;
+		maddr < ((uint64_t)&memlfs_start + 128*1024*1024*1024ULL);
 		maddr += 1024*1024*1024ULL) {
 	    addr = mmap((void *)maddr, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
-	    the_beginning = 'a';
-	    printf("%p==%p %c\n", addr, (void*)maddr, the_beginning);
+	    memlfs_start = 'a';
+	    printf("%p==%p %c\n", addr, (void*)maddr, memlfs_start);
 	    assert(addr == (void *)maddr);
     }
 
-    //sprintf(cmd, "./genlfs %s test.lfs", diskfile);
-    //assert(system(cmd) == 0);
     genlfs(diskfile, "test.lfs");
 
     /* set up virtual disk */

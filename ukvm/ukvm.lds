@@ -181,11 +181,11 @@ SECTIONS
   }
 
    . = ALIGN(1024*1024*1024);
-  .memfs   :
+  .memlfs   :
   {
-    the_beginning = .;
+    memlfs_start = .;
     . = ALIGN(128*1*1024*1024); /* 128 GB (these numbers are longs) */
-    the_end = .;
+    memlfs_end = .;
   }
 
   . = ALIGN(64 / 8);
