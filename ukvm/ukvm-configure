@@ -83,6 +83,7 @@ add_module ()
         fi
         enableit="-DUKVM_MODULE_$(echo $1 | tr '[a-z]' '[A-Z]')"
         add_obj "ukvm_module_fs.o"
+        add_obj "memlfs.a"
     else  
         if [ ! -f ${UKVM_SRC}/ukvm_module_$1.c ]; then
             die "Invalid module: $1"
@@ -98,7 +99,7 @@ UKVM_LDFLAGS="-T ${UKVM_SRC}/ukvm.lds -z execstack"
 UKVM_LDLIBS=
 UKVM_HEADERS=
 UKVM_OBJS=
-add_obj ukvm_core.o ukvm_elf.o ukvm_main.o genlfs.o
+add_obj ukvm_core.o ukvm_elf.o ukvm_main.o memlfs.a
 add_header ukvm.h ukvm_guest.h ukvm_cc.h config.h  lfs_accessors.h  lfs_extern.h  lfs.h
 
 for module in "$@"; do
@@ -157,8 +158,11 @@ _build-ukvm:
 _build-ukvm/ukvm_%.o: ${UKVM_SRC}/ukvm_%.c \$(MAKEFILE_LIST) | _build-ukvm
 	\$(UKVM_CC) \$(UKVM_CFLAGS) -c \$< -o \$@
 
-_build-ukvm/genlfs.o: ${UKVM_SRC}/lfs_cksum.c ${UKVM_SRC}/lfs.c ${UKVM_SRC}/genlfs.c
-	\$(UKVM_CC) -O2 -ggdb -c \$< -o \$@
+_build-ukvm/memlfs.a: _build-ukvm/genlfs.o _build-ukvm/lfs.o _build-ukvm/lfs_cksum.o
+	ar cr _build-ukvm/memlfs.a _build-ukvm/genlfs.o _build-ukvm/lfs_cksum.o _build-ukvm/lfs.o
+
+_build-ukvm/%.o: ${UKVM_SRC}/%.c
+	\$(UKVM_CC) -c \$< -o \$@
 
 ukvm-bin: \$(UKVM_OBJS) \$(MAKEFILE_LIST)
 	\$(UKVM_CC) \$(UKVM_LDFLAGS) -o \$@ \$(UKVM_OBJS) \$(UKVM_LDLIBS)

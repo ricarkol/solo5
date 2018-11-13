@@ -111,10 +111,10 @@ static int handle_cmdarg(char *cmdarg)
 extern char the_beginning;
 void *addr;
 
+extern int genlfs(char *directory, char *image);
+
 static int setup(struct ukvm_hv *hv)
 {
-    char cmd[256];
-
     if (diskfile == NULL)
         return -1;
 
@@ -130,13 +130,14 @@ static int setup(struct ukvm_hv *hv)
 	    assert(addr == (void *)maddr);
     }
 
-    sprintf(cmd, "./genlfs %s test.lfs", diskfile);
-    assert(system(cmd) == 0);
+    //sprintf(cmd, "./genlfs %s test.lfs", diskfile);
+    //assert(system(cmd) == 0);
+    genlfs(diskfile, "test.lfs");
 
     /* set up virtual disk */
     diskfd = open("test.lfs", O_RDWR);
     if (diskfd == -1)
-        err(1, "Could not open disk: %s", diskfile);
+        err(1, "Could not open disk: %s", "test.lfs");
 
     blkinfo.sector_size = 512;
     blkinfo.num_sectors = lseek(diskfd, 0, SEEK_END) / 512;

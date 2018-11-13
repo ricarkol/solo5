@@ -114,20 +114,19 @@ void walk(struct fs *fs, int parent_inum, int inum) {
 	closedir(d);
 }
 
-int main2(int argc, char **argv) {
+int genlfs(char *directory, char *image) {
 	struct fs fs;
 	uint64_t nbytes = 1024 * 1024 * 1024 * 4ULL;
+	char cwd[PATH_MAX];
 
-	if (argc != 3) {
-		errx(1, "Usage: %s <directory> <image>", argv[0]);
-	}
+	assert(getcwd(cwd, sizeof(cwd)) != NULL);
 
-	fs.fd = open(argv[2], O_CREAT | O_RDWR, DEFFILEMODE);
+	fs.fd = open(image, O_CREAT | O_RDWR, DEFFILEMODE);
 	assert(fs.fd != 0);
 
 	init_lfs(&fs, nbytes);
 
-	if (chdir(argv[1]) != 0)
+	if (chdir(directory) != 0)
 		return 1;
 
 	walk(&fs, ULFS_ROOTINO, ULFS_ROOTINO);
@@ -135,5 +134,16 @@ int main2(int argc, char **argv) {
 	write_ifile(&fs);
 	write_superblock(&fs);
 	write_segment_summary(&fs);
-	close(fs.fd);
+	assert(close(fs.fd) == 0);
+
+	chdir(cwd);
+	return 0;
+}
+
+int main2(int argc, char **argv) {
+	if (argc != 3) {
+		errx(1, "Usage: %s <directory> <image>", argv[0]);
+	}
+
+	return genlfs(argv[1], argv[2]);
 }
