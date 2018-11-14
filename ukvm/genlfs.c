@@ -13,6 +13,8 @@
 #include "config.h"
 #include "lfs.h"
 
+#define MEMLFS	1
+
 static int next_inum = 4;
 
 int get_next_inum(void) { return ++next_inum; }
@@ -78,17 +80,18 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 			printf("symlink\n");
 			break;
 		case S_IFREG: {
-			int fd = openat(AT_FDCWD, dirent->d_name, O_RDONLY);
+			int fd = openat(AT_FDCWD, dirent->d_name, O_RDWR);
 			assert(fd > 0);
-			void *addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+			void *addr = mmap(NULL, sb.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
 			int next_inum = get_next_inum();
-			printf("regular file (%d): %s\n", next_inum, dirent->d_name);
+			printf("regular file (%d): %s -- size %d (%p)\n", next_inum, dirent->d_name, sb.st_size, addr);
 			assert(addr);
 			write_file(fs, (char *)addr, sb.st_size, next_inum,
 					   LFS_IFREG | 0777, 1, 0);
-			munmap(addr, sb.st_size);
-			close(fd);
-
+#ifndef MEMLFS
+			//munmap(addr, sb.st_size);
+			//close(fd);
+#endif
 			assert(dir_add_entry(dir, dirent->d_name, next_inum,
 				      LFS_DT_REG) == 0);
 			break;

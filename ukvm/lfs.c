@@ -203,21 +203,19 @@ static const struct dlfs dlfs32_default = {
 	((IFILE32 *)&(_fs->ifile.ifiles[IFILE_OFF(_fs->lfs.dlfs_ifpb, (_i))]))
 
 void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
-	//assert(pwrite64(fs->fd, data, size, off) == size);
 	off_t dest = (void *)(fs->memlfs_start + off);
-	size = DFL_LFSBLOCK;
-	memcpy(dest, data, size);
-	return;
+	uint64_t i;
 
-	if (remap) {
-		assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-			MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
+	if (!remap) {
 		memcpy(dest, data, size);
-		//mremap(data, size, size, MREMAP_FIXED | MREMAP_MAYMOVE, dest);
-	} else {
-		assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-			MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
-		memcpy(dest, data, size);
+		return;
+	}
+
+	for (i = 0; i < size; i += 4096) {
+		munmap(dest+i, 4096);
+		assert(mremap(data+i, 4096, 4096,
+			MREMAP_FIXED | MREMAP_MAYMOVE, dest+i) == dest+i);
+		break;
 	}
 }
 
@@ -746,8 +744,8 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		char *curr_blk = data + (DFL_LFSBLOCK * i);
 		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
 		write_log(fs, curr_blk, DFL_LFSBLOCK,
-			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 1);
-
+			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
+			flags & LFS_IFREG);
 		if (i < ULFS_NDADDR) {
 			inode.di_db[i] = fs->lfs.dlfs_offset;
 		} else {
