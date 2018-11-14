@@ -200,9 +200,9 @@ static const struct dlfs dlfs32_default = {
 	((IFILE32 *)&(_fs->ifile.ifiles[IFILE_OFF(_fs->lfs.dlfs_ifpb, (_i))]))
 
 void write_log(struct fs *fs, void *data, uint64_t size, off_t off) {
-	assert(pwrite64(fs->fd, data, size, off) == size);
-	//off_t dest = fs->memlfs_start +	FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset);
-	//memcpy((void *)(dest), &inode, sizeof(inode));
+	//assert(pwrite64(fs->fd, data, size, off) == size);
+	off_t dest = fs->memlfs_start +	off;
+	memcpy((void *)(dest), data, size);
 }
 
 /* Add a block into the data checksum */

@@ -133,8 +133,8 @@ int memlfs(char *directory, void *dest, off_t size) {
 		return 1;
 
 	/* XXX: temp */
-	//assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-	//		MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
+	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+			MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
 
 	walk(dest, &fs, ULFS_ROOTINO, ULFS_ROOTINO);
 
@@ -142,8 +142,8 @@ int memlfs(char *directory, void *dest, off_t size) {
 	write_superblock(&fs);
 	write_segment_summary(&fs);
 
-	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-			MAP_PRIVATE, fs.fd, 0) == dest);
+	//assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+	//		MAP_PRIVATE, fs.fd, 0) == dest);
 
 	chdir(cwd);
 	return 0;
