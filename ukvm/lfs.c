@@ -206,6 +206,8 @@ void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
 	//assert(pwrite64(fs->fd, data, size, off) == size);
 	off_t dest = (void *)(fs->memlfs_start + off);
 	size = DFL_LFSBLOCK;
+	memcpy(dest, data, size);
+	return;
 
 	if (remap) {
 		assert(mmap(dest, size, PROT_READ|PROT_WRITE,

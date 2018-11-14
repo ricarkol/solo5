@@ -127,6 +127,9 @@ int memlfs(char *directory, void *dest, off_t size) {
 	fs.fd = open(image, O_CREAT | O_RDWR, DEFFILEMODE);
 	assert(fs.fd != 0);
 
+	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+			MAP_PRIVATE, fs.fd, 0) == dest);
+
 	init_lfs(&fs, size);
 
 	if (chdir(directory) != 0)
@@ -137,9 +140,6 @@ int memlfs(char *directory, void *dest, off_t size) {
 	write_ifile(&fs);
 	write_superblock(&fs);
 	write_segment_summary(&fs);
-
-	//assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-	//		MAP_PRIVATE, fs.fd, 0) == dest);
 
 	chdir(cwd);
 	return 0;
