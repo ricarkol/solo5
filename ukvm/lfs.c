@@ -204,13 +204,19 @@ static const struct dlfs dlfs32_default = {
 
 void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
 	//assert(pwrite64(fs->fd, data, size, off) == size);
-	off_t dest = fs->memlfs_start +	off;
-	memcpy((void *)(dest), data, size);
+	off_t dest = (void *)(fs->memlfs_start + off);
+	size = DFL_LFSBLOCK;
 
-	//if (remap)
-	//	mremap(data, size, size, MREMAP_FIXED | MREMAP_MAYMOVE, (void *)dest);
-	//else
-	//	memcpy((void *)(dest), data, size);
+	if (remap) {
+		assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+			MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
+		memcpy(dest, data, size);
+		//mremap(data, size, size, MREMAP_FIXED | MREMAP_MAYMOVE, dest);
+	} else {
+		assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+			MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
+		memcpy(dest, data, size);
+	}
 }
 
 /* Add a block into the data checksum */
