@@ -121,6 +121,9 @@ int memlfs(char *directory, void *dest, off_t size) {
 
 	assert(getcwd(cwd, sizeof(cwd)) != NULL);
 
+	/* address in mem of memlfs */
+	fs.memlfs_start = dest;
+
 	fs.fd = open(image, O_CREAT | O_RDWR, DEFFILEMODE);
 	assert(fs.fd != 0);
 
@@ -128,6 +131,10 @@ int memlfs(char *directory, void *dest, off_t size) {
 
 	if (chdir(directory) != 0)
 		return 1;
+
+	/* XXX: temp */
+	//assert(mmap(dest, size, PROT_READ|PROT_WRITE,
+	//		MAP_PRIVATE|MAP_ANONYMOUS, 0, 0) == dest);
 
 	walk(dest, &fs, ULFS_ROOTINO, ULFS_ROOTINO);
 

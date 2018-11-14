@@ -37,6 +37,7 @@
 
 static struct ukvm_blkinfo blkinfo;
 static char *diskfile;
+int diskfd;
 
 /* The memlfs stuff */
 extern char memlfs_start;
@@ -112,7 +113,7 @@ static int handle_cmdarg(char *cmdarg)
 
 static int setup(struct ukvm_hv *hv)
 {
-    off_t size = 1024 * 1024 * 1024 * 4ULL;
+    off_t size = 1024 * 1024 * 1024 * 2ULL;
 
     if (diskfile == NULL)
         return -1;
@@ -120,6 +121,10 @@ static int setup(struct ukvm_hv *hv)
     assert((uint64_t)&memlfs_start % 4096 == 0);
 
     memlfs(diskfile, &memlfs_start, size);
+    /* set up virtual disk */
+    diskfd = open("log.lfs", O_RDWR|O_CREAT, 0660);
+    if (diskfd == -1)
+        err(1, "Could not open disk: %s", "log.lfs");
 
     blkinfo.sector_size = 512;
     blkinfo.num_sectors = size / 512ULL;

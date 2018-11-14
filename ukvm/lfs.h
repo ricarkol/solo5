@@ -1314,6 +1314,7 @@ struct fs {
 	uint64_t	nbytes;
 	uint64_t	nsegs;
 	struct _ifile	ifile;
+	off_t		memlfs_start;
 };
 
 #ifndef DIRSIZE
