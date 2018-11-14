@@ -74,6 +74,7 @@
  * SUCH DAMAGE.
  */
 
+#define _GNU_SOURCE
 #include <err.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -84,6 +85,8 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <sys/mman.h>
 
 #include "config.h"
 #include "lfs.h"
@@ -199,10 +202,15 @@ static const struct dlfs dlfs32_default = {
 #define IFILE_GET(_fs, _i)                                                     \
 	((IFILE32 *)&(_fs->ifile.ifiles[IFILE_OFF(_fs->lfs.dlfs_ifpb, (_i))]))
 
-void write_log(struct fs *fs, void *data, uint64_t size, off_t off) {
+void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
 	//assert(pwrite64(fs->fd, data, size, off) == size);
 	off_t dest = fs->memlfs_start +	off;
 	memcpy((void *)(dest), data, size);
+
+	//if (remap)
+	//	mremap(data, size, size, MREMAP_FIXED | MREMAP_MAYMOVE, (void *)dest);
+	//else
+	//	memcpy((void *)(dest), data, size);
 }
 
 /* Add a block into the data checksum */
@@ -222,7 +230,7 @@ int write_superblock(struct fs *fs) {
 	for (i = 0; i < NSUPERBLOCKS; i++) {
 		fs->lfs.dlfs_cksum = lfs_sb_cksum32(&fs->lfs);
 		write_log(fs, &fs->lfs, sizeof(fs->lfs),
-			FSBLOCK_TO_BYTES(fs->lfs.dlfs_sboffs[i]));
+			FSBLOCK_TO_BYTES(fs->lfs.dlfs_sboffs[i]), 0);
 		fs->lfs.dlfs_serial++;
 	}
 	return 0;
@@ -332,7 +340,7 @@ void write_segment_summary(struct fs *fs) {
 	ssp->ss_sumsum = cksum((char *)fs->seg.segsum + sumstart,
 			       fs->lfs.dlfs_sumsize - sumstart);
 
-	write_log(fs, ssp, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->seg.disk_bno));
+	write_log(fs, ssp, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->seg.disk_bno), 0);
 }
 
 /* Advance the log by nr FS blocks. */
@@ -605,7 +613,7 @@ int write_single_indirect(struct fs *fs, struct _ifile *ifile, int *blk_ptrs,
 
 	assert(nblocks <= NPTR32);
 
-	write_log(fs, blk_ptrs, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+	write_log(fs, blk_ptrs, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 
 	segment_add_datasum(&fs->seg, (char *)blk_ptrs, DFL_LFSBLOCK);
 	segusage = SEGUSE_GET(fs, fs->seg.seg_number);
@@ -640,7 +648,7 @@ int write_double_indirect(struct fs *fs, struct _ifile *ifile, int *blk_ptrs,
 
 	off = fs->lfs.dlfs_offset;
 
-	write_log(fs, iblks, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+	write_log(fs, iblks, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 	segment_add_datasum(&fs->seg, (char *)iblks, DFL_LFSBLOCK);
 	segusage = SEGUSE_GET(fs, fs->seg.seg_number);
 	segusage->su_nbytes += DFL_LFSBLOCK;
@@ -674,7 +682,7 @@ int write_triple_indirect(struct fs *fs, struct _ifile *ifile, int *blk_ptrs,
 
 	off = fs->lfs.dlfs_offset;
 
-	write_log(fs, iblks, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+	write_log(fs, iblks, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 	segment_add_datasum(&fs->seg, (char *)iblks, DFL_LFSBLOCK);
 	segusage = SEGUSE_GET(fs, fs->seg.seg_number);
 	segusage->su_nbytes += DFL_LFSBLOCK;
@@ -730,7 +738,7 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		char *curr_blk = data + (DFL_LFSBLOCK * i);
 		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
 		write_log(fs, curr_blk, DFL_LFSBLOCK,
-			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 1);
 
 		if (i < ULFS_NDADDR) {
 			inode.di_db[i] = fs->lfs.dlfs_offset;
@@ -771,7 +779,7 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 	}
 
 	/* Write the inode */
-	write_log(fs, &inode, sizeof(inode), FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+	write_log(fs, &inode, sizeof(inode), FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 
 	assert(inumber < MAX_INODES);
 	
@@ -844,7 +852,7 @@ void write_ifile_content(struct fs *fs, struct _ifile *ifile,
 	for (i = 0; i < nblocks; i++) {
 		char *curr_blk = ifile->data + (DFL_LFSBLOCK * i);
 		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
-		write_log(fs, curr_blk, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+		write_log(fs, curr_blk, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 
 		if (i < ULFS_NDADDR) {
 			inode.di_db[i] = fs->lfs.dlfs_offset;
@@ -863,7 +871,7 @@ void write_ifile_content(struct fs *fs, struct _ifile *ifile,
 		uint32_t _nblocks = MIN(nblocks, NPTR32);
 		assert(_nblocks <= NPTR32);
 		inode.di_ib[0] = fs->lfs.dlfs_offset;
-		write_log(fs, indirect_blk, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset));
+		write_log(fs, indirect_blk, DFL_LFSBLOCK, FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 		segment_add_datasum(&fs->seg, (char *)indirect_blk, DFL_LFSBLOCK);
 		advance_log(fs, ifile, 1);
 		nblocks -= _nblocks;
@@ -871,7 +879,7 @@ void write_ifile_content(struct fs *fs, struct _ifile *ifile,
 	assert(nblocks == 0);
 
 	/* Write the inode (and indirect block) */
-	write_log(fs, &inode, sizeof(inode), FSBLOCK_TO_BYTES(inode_lbn));
+	write_log(fs, &inode, sizeof(inode), FSBLOCK_TO_BYTES(inode_lbn), 0);
 }
 
 void write_ifile(struct fs *fs) {
