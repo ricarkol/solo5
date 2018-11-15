@@ -202,9 +202,9 @@ static const struct dlfs dlfs32_default = {
 #define IFILE_GET(_fs, _i)                                                     \
 	((IFILE32 *)&(_fs->ifile.ifiles[IFILE_OFF(_fs->lfs.dlfs_ifpb, (_i))]))
 
-void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
-	off_t dest = (void *)(fs->memlfs_start + off);
-	off_t i;
+void write_log(struct fs *fs, void *data, uint64_t size, off_t lfs_off, int remap) {
+	off_t dest = (void *)(fs->memlfs_start + lfs_off);
+	off_t off;
 
 	printf("%llu %d %d\n", off, size, remap);
 	printf("%p %p %d\n", dest, data, size);
@@ -215,10 +215,17 @@ void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
 	}
 	printf("done\n");
 
-	for (i = 0; i < size; i += 4096) {
-		munmap(dest + i, 4096);
-		assert(mremap(data + i, 4096, 4096,
-			MREMAP_FIXED | MREMAP_MAYMOVE, dest + i) == dest + i);
+	for (off = 0; off < size; off += DFL_LFSBLOCK) {
+		off_t curr_size = (off + DFL_LFSBLOCK) >= size ? size - off : DFL_LFSBLOCK;
+		assert(curr_size <= DFL_LFSBLOCK && curr_size > 0);
+
+		/* Cannot remap sizes smaller than a page */
+		if (curr_size < DFL_LFSBLOCK)
+			curr_size = 4096 * DIV_UP(curr_size, 4096);
+
+		munmap(dest + off, curr_size);
+		assert(mremap(data + off, curr_size, curr_size,
+			MREMAP_FIXED | MREMAP_MAYMOVE, dest + off) == dest + off);
 	}
 }
 
@@ -748,8 +755,12 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		assert(i < nblocks);
 		char *curr_blk = data + (DFL_LFSBLOCK * i);
 		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
-		write_log(fs, curr_blk,
-			i + 1 == nblocks ? size % DFL_LFSBLOCK : DFL_LFSBLOCK,
+
+		/* extra care for last block */
+		off_t len = i + 1 == nblocks ? size - off : DFL_LFSBLOCK;
+		assert(len <= DFL_LFSBLOCK && len > 0);
+
+		write_log(fs, curr_blk, len,
 			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
 			mode & LFS_IFREG ? 1 : 0);
 		if (i < ULFS_NDADDR) {
