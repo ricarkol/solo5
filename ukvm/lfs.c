@@ -745,7 +745,7 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
 		write_log(fs, curr_blk, DFL_LFSBLOCK,
 			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
-			flags & LFS_IFREG);
+			mode & LFS_IFREG ? 1 : 0);
 		if (i < ULFS_NDADDR) {
 			inode.di_db[i] = fs->lfs.dlfs_offset;
 		} else {
