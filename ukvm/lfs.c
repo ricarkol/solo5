@@ -204,18 +204,21 @@ static const struct dlfs dlfs32_default = {
 
 void write_log(struct fs *fs, void *data, uint64_t size, off_t off, int remap) {
 	off_t dest = (void *)(fs->memlfs_start + off);
-	uint64_t i;
+	off_t i;
+
+	printf("%llu %d %d\n", off, size, remap);
+	printf("%p %p %d\n", dest, data, size);
 
 	if (!remap) {
 		memcpy(dest, data, size);
 		return;
 	}
+	printf("done\n");
 
 	for (i = 0; i < size; i += 4096) {
-		munmap(dest+i, 4096);
-		assert(mremap(data+i, 4096, 4096,
-			MREMAP_FIXED | MREMAP_MAYMOVE, dest+i) == dest+i);
-		break;
+		munmap(dest + i, 4096);
+		assert(mremap(data + i, 4096, 4096,
+			MREMAP_FIXED | MREMAP_MAYMOVE, dest + i) == dest + i);
 	}
 }
 
@@ -740,10 +743,13 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 
 	ifile->cleanerinfo->free_head++;
 
-	for (i = 0; i < nblocks; i++) {
+	off_t off;
+	for (off = 0, i = 0; off < size; off += DFL_LFSBLOCK, i++) {
+		assert(i < nblocks);
 		char *curr_blk = data + (DFL_LFSBLOCK * i);
 		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
-		write_log(fs, curr_blk, DFL_LFSBLOCK,
+		write_log(fs, curr_blk,
+			i + 1 == nblocks ? size % DFL_LFSBLOCK : DFL_LFSBLOCK,
 			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
 			mode & LFS_IFREG ? 1 : 0);
 		if (i < ULFS_NDADDR) {

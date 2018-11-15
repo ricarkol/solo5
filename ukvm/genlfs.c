@@ -83,6 +83,7 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 			int fd = openat(AT_FDCWD, dirent->d_name, O_RDONLY);
 			assert(fd > 0);
 			void *addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+			assert(addr != MAP_FAILED);
 			int next_inum = get_next_inum();
 			printf("regular file (%d): %s -- size %d (%p)\n", next_inum, dirent->d_name, sb.st_size, addr);
 			assert(addr);
@@ -132,6 +133,7 @@ int memlfs(char *directory, void *dest, off_t size) {
 
 	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
 			MAP_PRIVATE, fs.fd, 0) == dest);
+	assert(ftruncate(fs.fd, size) == 0);
 
 	init_lfs(&fs, size);
 
