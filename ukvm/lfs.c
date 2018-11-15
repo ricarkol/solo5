@@ -206,17 +206,17 @@ void write_log(struct fs *fs, void *data, uint64_t size, off_t lfs_off, int rema
 	off_t dest = (void *)(fs->memlfs_start + lfs_off);
 	off_t off;
 
-	printf("%llu %d %d\n", off, size, remap);
+	printf("%llu %d\n", off, remap);
 	printf("%p %p %d\n", dest, data, size);
 
 	if (!remap) {
 		memcpy(dest, data, size);
 		return;
 	}
-	printf("done\n");
 
 	for (off = 0; off < size; off += DFL_LFSBLOCK) {
-		off_t curr_size = (off + DFL_LFSBLOCK) >= size ? size - off : DFL_LFSBLOCK;
+		off_t curr_size = (off + DFL_LFSBLOCK) >= size ?
+						size - off : DFL_LFSBLOCK;
 		assert(curr_size <= DFL_LFSBLOCK && curr_size > 0);
 
 		/* Cannot remap sizes smaller than a page */
