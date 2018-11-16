@@ -180,11 +180,11 @@ SECTIONS
     *(LARGE_COMMON)
   }
 
-   . = ALIGN(1024*1024*1024);
+  . = ALIGN(1024*1024*1024);
   .memlfs   :
   {
     memlfs_start = .;
-    . = ALIGN(128*1*1024*1024); /* 128 GB (these numbers are longs) */
+    . = ALIGN(2*1024*1024*1024); /* 2 GB (these numbers are long ints) */
     memlfs_end = .;
   }
 
