@@ -93,6 +93,7 @@
 #include "lfs_accessors.h"
 
 #define SF_IMMUTABLE 0x00020000 /* file may not be changed */
+#define PAGESIZE 4096
 
 #define HIGHEST_USED_INO ULFS_ROOTINO
 
@@ -204,28 +205,22 @@ static const struct dlfs dlfs32_default = {
 
 void write_log(struct fs *fs, void *data, uint64_t size, off_t lfs_off, int remap) {
 	off_t dest = (void *)(fs->memlfs_start + lfs_off);
-	off_t off;
-
-	printf("%llu %d\n", off, remap);
-	printf("%p %p %d\n", dest, data, size);
 
 	if (!remap) {
 		memcpy(dest, data, size);
 		return;
 	}
 
-	for (off = 0; off < size; off += DFL_LFSBLOCK) {
-		off_t curr_size = (off + DFL_LFSBLOCK) >= size ?
-						size - off : DFL_LFSBLOCK;
-		assert(curr_size <= DFL_LFSBLOCK && curr_size > 0);
-
-		/* Cannot remap sizes smaller than a page */
-		if (curr_size < DFL_LFSBLOCK)
-			curr_size = 4096 * DIV_UP(curr_size, 4096);
-
-		munmap(dest + off, curr_size);
-		assert(mremap(data + off, curr_size, curr_size,
-			MREMAP_FIXED | MREMAP_MAYMOVE, dest + off) == dest + off);
+	off_t curr_size = size - (size % PAGESIZE);
+	assert(curr_size % PAGESIZE == 0);
+	if (curr_size > 0) {
+		assert(mremap(data, curr_size, curr_size,
+			MREMAP_FIXED | MREMAP_MAYMOVE, dest) == dest);
+	}
+	if (size % PAGESIZE > 0) {
+		assert(mremap(data + curr_size, PAGESIZE, PAGESIZE,
+			MREMAP_FIXED | MREMAP_MAYMOVE,
+			dest + curr_size) == dest + curr_size);
 	}
 }
 
@@ -710,7 +705,7 @@ int write_triple_indirect(struct fs *fs, struct _ifile *ifile, int *blk_ptrs,
 void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		int nlink, int flags) {
 	struct _ifile *ifile = &fs->ifile;
-	int32_t nblocks = (size + DFL_LFSBLOCK - 1) / DFL_LFSBLOCK;
+	int32_t nblocks = DIV_UP(size, DFL_LFSBLOCK);
 	uint32_t i, j;
 	int *blk_ptrs;
 	int *indirect_blks = malloc(num_iblocks(nblocks) * DFL_LFSBLOCK);
@@ -750,27 +745,40 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 
 	ifile->cleanerinfo->free_head++;
 
-	off_t off;
-	for (off = 0, i = 0; off < size; off += DFL_LFSBLOCK, i++) {
+	off_t pending;
+	for (pending = size, i = 0; pending > 0;) {
 		assert(i < nblocks);
-		char *curr_blk = data + (DFL_LFSBLOCK * i);
-		segment_add_datasum(&fs->seg, curr_blk, DFL_LFSBLOCK);
+		off_t avail_blocks, curr_nblocks, len;
 
-		/* extra care for last block */
-		off_t len = i + 1 == nblocks ? size - off : DFL_LFSBLOCK;
-		assert(len <= DFL_LFSBLOCK && len > 0);
+		char *curr_blk = data + (DFL_LFSBLOCK * i);
+		avail_blocks = fs->lfs.dlfs_fsbpseg;
+		avail_blocks -= fs->lfs.dlfs_offset - fs->lfs.dlfs_curseg;
+		assert(avail_blocks > 0 && avail_blocks < fs->lfs.dlfs_fsbpseg);
+
+		len = MIN(pending, avail_blocks * DFL_LFSBLOCK);
+		curr_nblocks = DIV_UP(len, DFL_LFSBLOCK);
+		assert(len <= avail_blocks * DFL_LFSBLOCK && len > 0);
+		assert(curr_nblocks <= avail_blocks && curr_nblocks > 0);
+
+		segment_add_datasum(&fs->seg, curr_blk, len);
 
 		write_log(fs, curr_blk, len,
 			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
 			mode & LFS_IFREG ? 1 : 0);
-		if (i < ULFS_NDADDR) {
-			inode.di_db[i] = fs->lfs.dlfs_offset;
-		} else {
-			indirect_blks[i - ULFS_NDADDR] = fs->lfs.dlfs_offset;
+
+		for (j = 0; j < curr_nblocks; j++, i++) {
+			if (i < ULFS_NDADDR) {
+				inode.di_db[i] = fs->lfs.dlfs_offset + j;
+			} else {
+				indirect_blks[i - ULFS_NDADDR] = fs->lfs.dlfs_offset + j;
+			}
 		}
+
 		segusage = SEGUSE_GET(fs, fs->seg.seg_number);
-		segusage->su_nbytes += DFL_LFSBLOCK;
-		advance_log(fs, ifile, 1);
+		segusage->su_nbytes += curr_nblocks * DFL_LFSBLOCK;
+		advance_log(fs, ifile, curr_nblocks);
+
+		pending -= len;
 	}
 
 	nblocks -= MIN(nblocks, ULFS_NDADDR);
