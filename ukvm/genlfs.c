@@ -82,8 +82,11 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 		case S_IFREG: {
 			int fd = openat(AT_FDCWD, dirent->d_name, O_RDONLY);
 			assert(fd > 0);
-			void *addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-			assert(addr != MAP_FAILED);
+			void *addr;
+			if (sb.st_size > 0) {
+				addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+				assert(addr != MAP_FAILED);
+			}
 			int next_inum = get_next_inum();
 			printf("regular file (%d): %s -- size %d (%p)\n", next_inum, dirent->d_name, sb.st_size, addr);
 			assert(addr);
