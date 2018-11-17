@@ -68,7 +68,7 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 			int next_inum = get_next_inum();
 			assert(dir_add_entry(dir, dirent->d_name, next_inum,
 				      LFS_DT_DIR) == 0);
-			printf("directory (%d): %s\n", next_inum, dirent->d_name);
+			//printf("directory (%d): %s\n", next_inum, dirent->d_name);
 			chdir(dirent->d_name);
 			walk(dest, fs, inum, next_inum);
 			chdir("..");
@@ -77,21 +77,21 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 			printf("FIFO/pipe\n");
 			break;
 		case S_IFLNK:
-			printf("symlink\n");
+			//printf("symlink\n");
 			break;
 		case S_IFREG: {
 			int fd = openat(AT_FDCWD, dirent->d_name, O_RDONLY);
 			assert(fd > 0);
 			void *addr;
-			if (sb.st_size > 0) {
-				addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-				assert(addr != MAP_FAILED);
-			}
+			//if (sb.st_size > 0) {
+			//	addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+			//	assert(addr != MAP_FAILED);
+			//}
 			int next_inum = get_next_inum();
-			printf("regular file (%d): %s -- size %d (%p)\n", next_inum, dirent->d_name, sb.st_size, addr);
+			//printf("regular file (%d): %s -- size %d (%p)\n", next_inum, dirent->d_name, sb.st_size, addr);
 			assert(addr);
 			write_file(fs, (char *)addr, sb.st_size, next_inum,
-					   LFS_IFREG | 0777, 1, 0);
+					   LFS_IFREG | 0777, 1, 0, fd);
 #ifndef MEMLFS
 			//munmap(addr, sb.st_size);
 			//close(fd);
@@ -115,7 +115,7 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 
 	/* TODO: nlinks should be 2 for root. What about others (does ..
 	 * count)? */
-	write_file(fs, dir->data, dir->curr, inum, LFS_IFDIR | 0755, 1, 0);
+	write_file(fs, dir->data, dir->curr, inum, LFS_IFDIR | 0755, 1, 0, -1);
 	free(dir);
 
 	closedir(d);

@@ -203,6 +203,13 @@ static const struct dlfs dlfs32_default = {
 #define IFILE_GET(_fs, _i)                                                     \
 	((IFILE32 *)&(_fs->ifile.ifiles[IFILE_OFF(_fs->lfs.dlfs_ifpb, (_i))]))
 
+void write_log_map(struct fs *fs, uint64_t size, off_t lfs_off, int fd, off_t file_off) {
+	off_t dest = (void *)(fs->memlfs_start + lfs_off);
+
+	munmap(dest, size);
+	assert(mmap(dest, size, PROT_READ, MAP_PRIVATE, fd, file_off) == dest);
+}
+
 void write_log(struct fs *fs, void *data, uint64_t size, off_t lfs_off, int remap) {
 	off_t dest = (void *)(fs->memlfs_start + lfs_off);
 
@@ -472,7 +479,7 @@ void write_empty_root_dir(struct fs *fs) {
 	assert(fs->lfs.dlfs_offset == 3);
 	assert(dir.curr == LFS_DIRBLKSIZ);
 	write_file(fs, &dir.data[0], dir.curr, ULFS_ROOTINO,
-			LFS_IFDIR | 0755, 2, 0);
+			LFS_IFDIR | 0755, 2, 0, -1);
 }
 
 void init_ifile(struct fs *fs) {
@@ -703,7 +710,7 @@ int write_triple_indirect(struct fs *fs, struct _ifile *ifile, int *blk_ptrs,
 }
 
 void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
-		int nlink, int flags) {
+		int nlink, int flags, int fd) {
 	struct _ifile *ifile = &fs->ifile;
 	int32_t nblocks = DIV_UP(size, DFL_LFSBLOCK);
 	uint32_t i, j;
@@ -745,8 +752,9 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 
 	ifile->cleanerinfo->free_head++;
 
-	off_t pending;
-	for (pending = size, i = 0; pending > 0;) {
+	off_t pending, file_off;
+	for (pending = size, i = 0, file_off = 0;
+			pending > 0;) {
 		assert(i < nblocks);
 		off_t avail_blocks, curr_nblocks, len;
 
@@ -760,11 +768,16 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		assert(len <= avail_blocks * DFL_LFSBLOCK && len > 0);
 		assert(curr_nblocks <= avail_blocks && curr_nblocks > 0);
 
-		segment_add_datasum(&fs->seg, curr_blk, len);
-
-		write_log(fs, curr_blk, len,
-			FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
-			mode & LFS_IFREG ? 1 : 0);
+		if (fd == -1) {
+			segment_add_datasum(&fs->seg, curr_blk, len);
+			write_log(fs, curr_blk, len,
+				FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
+				mode & LFS_IFREG ? 1 : 0);
+		} else {
+			write_log_map(fs, len,
+				FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
+				fd, file_off);
+		}
 
 		for (j = 0; j < curr_nblocks; j++, i++) {
 			if (i < ULFS_NDADDR) {
@@ -779,6 +792,7 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		advance_log(fs, ifile, curr_nblocks);
 
 		pending -= len;
+		file_off += len;
 	}
 
 	nblocks -= MIN(nblocks, ULFS_NDADDR);
