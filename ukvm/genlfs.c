@@ -131,7 +131,7 @@ int memlfs(char *directory, void *dest, off_t size) {
 	assert(fs.fd != 0);
 
 	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-			MAP_PRIVATE, fs.fd, 0) == dest);
+			MAP_SHARED, fs.fd, 0) == dest);
 	assert(ftruncate(fs.fd, size) == 0);
 
 	init_lfs(&fs, size);
