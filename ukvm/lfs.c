@@ -213,22 +213,7 @@ void write_log_map(struct fs *fs, uint64_t size, off_t lfs_off, int fd, off_t fi
 void write_log(struct fs *fs, void *data, uint64_t size, off_t lfs_off, int remap) {
 	off_t dest = (void *)(fs->memlfs_start + lfs_off);
 
-	if (!remap) {
-		memcpy(dest, data, size);
-		return;
-	}
-
-	off_t curr_size = size - (size % PAGESIZE);
-	assert(curr_size % PAGESIZE == 0);
-	if (curr_size > 0) {
-		assert(mremap(data, curr_size, curr_size,
-			MREMAP_FIXED | MREMAP_MAYMOVE, dest) == dest);
-	}
-	if (size % PAGESIZE > 0) {
-		assert(mremap(data + curr_size, PAGESIZE, PAGESIZE,
-			MREMAP_FIXED | MREMAP_MAYMOVE,
-			dest + curr_size) == dest + curr_size);
-	}
+	memcpy(dest, data, size);
 }
 
 /* Add a block into the data checksum */
@@ -771,8 +756,7 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 		if (fd == -1) {
 			segment_add_datasum(&fs->seg, curr_blk, len);
 			write_log(fs, curr_blk, len,
-				FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
-				mode & LFS_IFREG ? 1 : 0);
+				FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset), 0);
 		} else {
 			write_log_map(fs, len,
 				FSBLOCK_TO_BYTES(fs->lfs.dlfs_offset),
