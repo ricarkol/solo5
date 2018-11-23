@@ -37,6 +37,7 @@
 
 static struct ukvm_blkinfo blkinfo;
 static char *diskfile;
+static char *logfile;
 int diskfd;
 
 /* The memlfs stuff */
@@ -104,11 +105,15 @@ static void hypercall_blkread(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 
 static int handle_cmdarg(char *cmdarg)
 {
-    if (strncmp("--dir=", cmdarg, 6))
-        return -1;
-    diskfile = cmdarg + 6;
-
-    return 0;
+    if (!strncmp("--dir=", cmdarg, 6)) {
+    	diskfile = cmdarg + 6;
+	return 0;
+    } else if (!strncmp("--log=", cmdarg, 6)) {
+    	logfile = cmdarg + 6;
+    	return 0;
+    } else {
+	return -1;
+    }
 }
 
 static int setup(struct ukvm_hv *hv)
@@ -117,14 +122,20 @@ static int setup(struct ukvm_hv *hv)
 
     if (diskfile == NULL)
         return -1;
+    if (logfile == NULL) {
+    	diskfd = open("log.lfs", O_RDWR|O_CREAT, 0660);
+    	if (diskfd == -1)
+        	err(1, "Could not open disk: %s", "log.lfs");
+    } else {
+    	diskfd = open(logfile, O_RDWR|O_CREAT, 0660);
+    	if (diskfd == -1)
+        	err(1, "Could not open disk: %s", logfile);
+    }
 
     assert((uint64_t)&memlfs_start % 4096 == 0);
 
     memlfs(diskfile, &memlfs_start, size);
     /* set up virtual disk */
-    diskfd = open("log.lfs", O_RDWR|O_CREAT, 0660);
-    if (diskfd == -1)
-        err(1, "Could not open disk: %s", "log.lfs");
 
     blkinfo.sector_size = 512;
     blkinfo.num_sectors = size / 512ULL;
