@@ -117,17 +117,16 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 	closedir(d);
 }
 
-int memlfs(char *directory, void *dest, off_t size) {
+int memlfs(int diskfd, void *dest, off_t size) {
 	struct fs fs;
 	char cwd[PATH_MAX];
-	char image[] = "test.lfs";
 
 	assert(getcwd(cwd, sizeof(cwd)) != NULL);
 
 	/* address in mem of memlfs */
 	fs.memlfs_start = dest;
 
-	fs.fd = open(image, O_CREAT | O_RDWR, DEFFILEMODE);
+	fs.fd = diskfd;
 	assert(fs.fd != 0);
 
 	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
@@ -135,9 +134,6 @@ int memlfs(char *directory, void *dest, off_t size) {
 	assert(ftruncate(fs.fd, size) == 0);
 
 	init_lfs(&fs, size);
-
-	if (chdir(directory) != 0)
-		return 1;
 
 	walk(dest, &fs, ULFS_ROOTINO, ULFS_ROOTINO);
 

@@ -42,7 +42,7 @@ int diskfd;
 
 /* The memlfs stuff */
 extern char memlfs_start;
-extern int memlfs(char *directory, void *dest, off_t size);
+extern int memlfs(int fd, void *dest, off_t size);
 
 static void hypercall_blkinfo(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 {
@@ -134,7 +134,7 @@ static int setup(struct ukvm_hv *hv)
 
     assert((uint64_t)&memlfs_start % 4096 == 0);
 
-    memlfs(diskfile, &memlfs_start, size);
+    memlfs(diskfd, &memlfs_start, size);
     /* set up virtual disk */
 
     blkinfo.sector_size = 512;
