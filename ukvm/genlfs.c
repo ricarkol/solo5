@@ -131,7 +131,7 @@ int memlfs(int diskfd, void *dest, off_t size) {
 
 	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
 			MAP_SHARED, fs.fd, 0) == dest);
-	assert(ftruncate(fs.fd, size) == 0);
+	ftruncate(fs.fd, size);
 
 	init_lfs(&fs, size);
 
