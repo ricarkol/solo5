@@ -80,6 +80,8 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 			//printf("symlink\n");
 			break;
 		case S_IFREG: {
+			if (strcmp(dirent->d_name, "log.lfs") == 0)
+				break;
 			int fd = openat(AT_FDCWD, dirent->d_name, O_RDONLY);
 			if (fd == -1)
 				errx("Can't open file: %s", dirent->d_name);
