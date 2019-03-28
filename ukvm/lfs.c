@@ -483,7 +483,7 @@ void init_ifile(struct fs *fs) {
 
 	uint32_t nblocks =
 	    lfs->dlfs_cleansz + lfs->dlfs_segtabsz + IFILE_MAP_SZ;
-	ifile->data = malloc(nblocks * DFL_LFSBLOCK);
+	ifile->data = calloc(nblocks, DFL_LFSBLOCK);
 	assert(ifile->data);
 
 	ifile->cleanerinfo = (struct _cleanerinfo32 *)ifile->data;
@@ -590,7 +590,7 @@ void add_finfo_inode(struct fs *fs, uint64_t size, uint32_t inumber) {
 }
 
 /* Calculate the number of indirect blocks for a file of size (size) */
-uint32_t num_iblocks(uint32_t nblocks) {
+uint32_t num_iblocks(int32_t nblocks) {
 	uint32_t res = 1;
 	nblocks -= ULFS_NDADDR;
 
@@ -700,7 +700,7 @@ void write_file(struct fs *fs, char *data, uint64_t size, int inumber, int mode,
 	int32_t nblocks = DIV_UP(size, DFL_LFSBLOCK);
 	uint32_t i, j;
 	int *blk_ptrs;
-	int *indirect_blks = malloc(num_iblocks(nblocks) * DFL_LFSBLOCK);
+	int *indirect_blks = calloc(DFL_LFSBLOCK, num_iblocks(nblocks));
 	assert(indirect_blks);
 	SEGUSE *segusage;
 
@@ -1018,7 +1018,7 @@ void init_lfs(struct fs *fs, uint64_t nbytes) {
 	/* This mem is freed at exit time. */
 	assert(lfs->dlfs_sumsize >= DFL_LFSBLOCK);
 	assert(lfs->dlfs_sumsize % DFL_LFSBLOCK == 0);
-	fs->seg.segsum = malloc(lfs->dlfs_sumsize);
+	fs->seg.segsum = calloc(1, lfs->dlfs_sumsize);
 	assert(fs->seg.segsum);
 
 	/* XXX: These make things a lot simpler. */
