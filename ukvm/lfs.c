@@ -594,6 +594,7 @@ uint32_t num_iblocks(int32_t nblocks) {
 	uint32_t res = 1;
 	nblocks -= ULFS_NDADDR;
 
+	/* this can be negative (it's fine) */
 	if (nblocks > (NPTR32 * NPTR32 * NPTR32))
 		res += DIV_UP(nblocks, NPTR32 * NPTR32 * NPTR32);
 	if (nblocks > (NPTR32 * NPTR32))
