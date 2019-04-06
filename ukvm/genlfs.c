@@ -119,21 +119,23 @@ void walk(void *dest, struct fs *fs, int parent_inum, int inum) {
 	closedir(d);
 }
 
-int memlfs(int diskfd, char *directory, void *dest, off_t size) {
+uint64_t memlfs(int diskfd, char *directory, off_t size) {
 	struct fs fs;
 	char cwd[PATH_MAX];
+	uint64_t dest;
 
 	assert(getcwd(cwd, sizeof(cwd)) != NULL);
-
-	/* address in mem of memlfs */
-	fs.memlfs_start = dest;
 
 	fs.fd = diskfd;
 	assert(fs.fd != 0);
 
-	assert(mmap(dest, size, PROT_READ|PROT_WRITE,
-			MAP_SHARED, fs.fd, 0) == dest);
-	ftruncate(fs.fd, size);
+	dest = mmap(0, size, PROT_READ|PROT_WRITE,
+			MAP_SHARED, fs.fd, 0);
+	assert(dest != MAP_FAILED);
+	assert(ftruncate(fs.fd, size) == 0);
+
+	/* address in mem of memlfs */
+	fs.memlfs_start = dest;
 
 	init_lfs(&fs, size);
 	if (chdir(directory) != 0)
@@ -146,5 +148,5 @@ int memlfs(int diskfd, char *directory, void *dest, off_t size) {
 	write_segment_summary(&fs);
 
 	chdir(cwd);
-	return 0;
+	return dest;
 }

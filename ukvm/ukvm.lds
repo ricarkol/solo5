@@ -180,14 +180,6 @@ SECTIONS
     *(LARGE_COMMON)
   }
 
-  . = ALIGN(1024*1024*1024);
-  .memlfs   :
-  {
-    memlfs_start = .;
-    . = ALIGN(2*1024*1024*1024); /* 2 GB (these numbers are long ints) */
-    memlfs_end = .;
-  }
-
   . = ALIGN(64 / 8);
   . = SEGMENT_START("ldata-segment", .);
   .lrodata   ALIGN(CONSTANT (MAXPAGESIZE)) + (. & (CONSTANT (MAXPAGESIZE) - 1)) :

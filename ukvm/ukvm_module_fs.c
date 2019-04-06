@@ -41,8 +41,8 @@ static char *logfile;
 int diskfd;
 
 /* The memlfs stuff */
-extern char memlfs_start;
-extern int memlfs(int fd, char *directory, void *dest, off_t size);
+uint64_t memlfs_start;
+extern uint64_t memlfs(int fd, char *directory, off_t size);
 
 static void hypercall_blkinfo(struct ukvm_hv *hv, ukvm_gpa_t gpa)
 {
@@ -72,7 +72,7 @@ static void hypercall_blkwrite(struct ukvm_hv *hv, ukvm_gpa_t gpa)
         return;
     }
 
-    memcpy((void *)((off_t)&memlfs_start + pos),
+    memcpy((void *)((off_t)memlfs_start + pos),
 		UKVM_CHECKED_GPA_P(hv, wr->data, wr->len),
 		wr->len);
 
@@ -98,7 +98,7 @@ static void hypercall_blkread(struct ukvm_hv *hv, ukvm_gpa_t gpa)
     }
 
     memcpy(UKVM_CHECKED_GPA_P(hv, rd->data, rd->len),
-		(void *)((off_t)&memlfs_start + pos),
+		(void *)((off_t)memlfs_start + pos),
 		rd->len);
     rd->ret = 0;
 }
@@ -132,10 +132,10 @@ static int setup(struct ukvm_hv *hv)
         	err(1, "Could not open disk: %s", logfile);
     }
 
-    assert((uint64_t)&memlfs_start % 4096 == 0);
-
-    memlfs(diskfd, diskfile, &memlfs_start, size);
+    memlfs_start = memlfs(diskfd, diskfile, size);
     /* set up virtual disk */
+
+    assert(memlfs_start % 4096 == 0);
 
     blkinfo.sector_size = 512;
     blkinfo.num_sectors = size / 512ULL;
