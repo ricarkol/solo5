@@ -118,7 +118,7 @@ static int handle_cmdarg(char *cmdarg)
 
 static int setup(struct ukvm_hv *hv)
 {
-    off_t size = 1024 * 1024 * 1024 * 4ULL;
+    off_t size = 1024 * 1024 * 1024 * 16ULL;
 
     if (diskfile == NULL)
         return -1;
