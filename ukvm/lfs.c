@@ -207,7 +207,7 @@ void write_log_map(struct fs *fs, uint64_t size, off_t lfs_off, int fd, off_t fi
 	off_t dest = (void *)(fs->memlfs_start + lfs_off);
 
 	munmap(dest, size);
-	assert(mmap(dest, size, PROT_READ, MAP_PRIVATE, fd, file_off) == dest);
+	assert(mmap(dest, size, PROT_READ, MAP_SHARED, fd, file_off) == dest);
 }
 
 void write_log(struct fs *fs, void *data, uint64_t size, off_t lfs_off, int remap) {
