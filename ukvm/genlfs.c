@@ -129,8 +129,9 @@ uint64_t memlfs(int diskfd, char *directory, off_t size) {
 	fs.fd = diskfd;
 	assert(fs.fd != 0);
 
-	dest = mmap(0, size, PROT_READ|PROT_WRITE,
-			MAP_SHARED, fs.fd, 0);
+	//dest = mmap(0, size, PROT_READ|PROT_WRITE,
+	dest = mmap(0x100000000000, size, PROT_READ|PROT_WRITE,
+			MAP_SHARED|MAP_FIXED, fs.fd, 0);
 	assert(dest != MAP_FAILED);
 	assert(ftruncate(fs.fd, size) == 0);
 
